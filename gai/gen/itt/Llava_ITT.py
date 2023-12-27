@@ -125,17 +125,6 @@ class Llava_ITT:
         keywords = [stop_str]
         stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
         return input_ids, image_tensor, stopping_criteria
-        # with torch.inference_mode():
-        #     output_ids = self.model.generate(
-        #         input_ids,
-        #         images=image_tensor,
-        #         do_sample=True if self.config.temperature > 0 else False,
-        #         temperature=self.config.temperature,
-        #         max_new_tokens=self.config.max_new_tokens,
-        #         use_cache=True,
-        #         stopping_criteria=[stopping_criteria])
-        # outputs = self.tokenizer.decode(output_ids[0, input_ids.shape[1]:]).strip()
-        # return outputs
     
     def _generating(self, input_ids, image_tensor, stopping_criteria, **model_params):
         id = str(uuid4())       

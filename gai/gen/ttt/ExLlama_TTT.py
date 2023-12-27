@@ -1,5 +1,6 @@
 import torch, gc, re,os
-from gai.common import logger, generators_utils
+from gai.common import logging, generators_utils
+logger = logging.get_logger(__name__)
 from gai.common.utils import get_config_path
 from exllama.model import ExLlama, ExLlamaCache, ExLlamaConfig
 from exllama.tokenizer import ExLlamaTokenizer
@@ -253,12 +254,14 @@ class ExLlama_TTT:
             if i == max_new_tokens - 1:
                 logger.debug(f"exllama_engine.streaming: stopped by max_new_tokens: {max_new_tokens}")
                 yield self.parse_chunk_output(id,new_token, "length")
+                self.client.end_beam_search() 
                 return
 
             yield self.parse_chunk_output(id,new_token)
 
         # all done:
         self.client.end_beam_search() 
+        return
 
     # Sample:
     #ChatCompletionChunk(

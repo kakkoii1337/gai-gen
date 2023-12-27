@@ -1,11 +1,14 @@
-from fastapi import FastAPI, Body, UploadFile,File
-from pydantic import BaseModel, Extra
+from fastapi import FastAPI, Body
+from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.responses import StreamingResponse,JSONResponse
 from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
+import asyncio
 import os,json,io
 load_dotenv()
+os.environ["LOG_LEVEL"] = "DEBUG"
+os.environ["USE_SEMAPHORE"] = "True"
 
 # Configure Dependencies
 import dependencies
@@ -20,13 +23,12 @@ app=FastAPI(
     docs_url=swagger_url
     )
 dependencies.configure_cors(app)
-
-# Enforce Thread-Safety
-import asyncio
-semaphore = asyncio.Semaphore(1)
+semaphore = dependencies.configure_semaphore()
 
 from gai.gen import Gaigen
 generator = Gaigen.GetInstance()
+# Pre-load default model
+generator.load("mistral7b-exllama")
 
 ### ----------------- TTT ----------------- ###
 class MessageRequest(BaseModel):
@@ -43,9 +45,7 @@ async def _text_to_text(request: ChatCompletionRequest = Body(...)):
     try:
         model = request.model
         messages = request.messages
-        logger.debug(f"_create: model={model} messages={messages}")
         model_params = request.model_dump(exclude={"model", "messages"})  
-        logger.debug(f"_create: model_params={model_params}")
         gen = Gaigen.GetInstance().load(model)
 
         stream = model_params.pop("stream", False)
@@ -73,5 +73,4 @@ async def _text_to_text(request: ChatCompletionRequest = Body(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    #uvicorn.run(app, host="0.0.0.0", port=12031, workers=4)
     uvicorn.run(app, host="0.0.0.0", port=12031)

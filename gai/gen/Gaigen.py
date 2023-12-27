@@ -14,6 +14,9 @@ class Gaigen:
 
     def __init__(self):
         """Virtually private constructor."""
+        logger.info("Gaigen.__init__")
+        logger.debug("Gaigen.__init__")
+
         if Gaigen.__instance is not None:
             raise Exception("Gaigen: This class is a singleton!")
         else:
@@ -54,15 +57,16 @@ class Gaigen:
         else:
             logger.error(f"Gaigen.load: The generator_type {generator_type} is not supported.")
             raise Exception(f"Gaigen.load: The generator_type {generator_type} is not supported.")
-        self.generator_name = generator_name
-
+        
         try:
+            logger.info(f"Gaigen: Loading generator {generator_name}...")
             self.generator.load()
+            self.generator_name = generator_name
+            return self.generator
         except Exception as e:
-            logger.error(f"Gaigen: Error loading generator {self.generator_name}: {e}")
+            logger.error(f"Gaigen: Error loading generator {generator_name}: {e}")
             raise e
        
-        return self.generator
 
     def unload(self):
         if self.generator is not None:

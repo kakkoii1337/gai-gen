@@ -21,6 +21,8 @@ class TTS:
         return self.speech.create(**model_params)
 
     def load(self):
+        logger.info("Loading TTS...")
+        print("Loading TTS...")
         if "engine" in self.config:
             logger.info(f"Using tts model {self.config['engine']}...")
         self.speech.load()

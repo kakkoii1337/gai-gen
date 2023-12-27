@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi.responses import StreamingResponse,JSONResponse
 from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
-import os,json,io
+import os,json,io, asyncio
 load_dotenv()
 
 # Configure Dependencies
@@ -20,13 +20,12 @@ app=FastAPI(
     docs_url=swagger_url
     )
 dependencies.configure_cors(app)
-
-# Enforce Thread-Safety
-import asyncio
-semaphore = asyncio.Semaphore(1)
+semaphore = dependencies.configure_semaphore()
 
 from gai.gen import Gaigen
 generator = Gaigen.GetInstance()
+# Pre-load default model
+generator.load("llava-transformers")
 
 ### ----------------- ITT ----------------- ###
 class ImageToTextRequest(BaseModel):
@@ -36,36 +35,29 @@ class ImageToTextRequest(BaseModel):
     class Config:
         extra = 'allow'  # Allow extra fields
 
-# @app.post("/gen/v1/vision/completions")
-# async def _image_to_text(request: ImageToTextRequest = Body(...)):
-#     gen = Gaigen.GetInstance().load(request.model)
-#     params = request.dict(exclude={"model", "messages","stream"})  # Get extra fields
-#     response = gen.create(
-#         messages=request.messages,
-#         stream=request.stream,
-#         **params
-#         )
-#     return response
-
 @app.post("/gen/v1/vision/completions")
 async def _image_to_text(request: ImageToTextRequest = Body(...)):
-    model = request.model
-    gen = Gaigen.GetInstance().load(model)
-    messages = request.messages
-    model_params = request.model_dump(exclude={"model", "messages","stream"})  # Get extra fields
-    stream = request.stream
-    if stream:
-        return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in gen.create(
-        messages=messages,
-        stream=True,
-        **model_params
-        ))
-    else:
-        return gen.create(
-        messages=messages,
-        stream=True,
-        **model_params
-        )
+    try:
+        model = request.model
+        gen = Gaigen.GetInstance().load(model)
+        messages = request.messages
+        model_params = request.dict(exclude={"model", "messages","stream"})  # Get extra fields
+        stream = request.stream
+        if stream:
+            return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in gen.create(
+            messages=messages,
+            stream=True,
+            **model_params
+            ))
+        else:
+            return gen.create(
+            messages=messages,
+            stream=True,
+            **model_params
+            )
+    except Exception as e:
+        logger.error(e)
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
     import uvicorn

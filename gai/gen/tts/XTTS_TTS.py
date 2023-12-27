@@ -13,7 +13,9 @@ class XTTS_TTS:
         pass
 
     def load(self):
-        import torch
+        logger.info("Loading XTTS...")
+        print("Loading XTTS...")
+        
         os.environ["COQUI_TOS_AGREED"] = "1"
         device = "cuda" if torch.cuda.is_available() else "cpu"
         base_dir = f"{get_config_path()}/models"
@@ -30,7 +32,7 @@ class XTTS_TTS:
         self.model = Xtts.init_from_config(self.config)
         self.model.load_checkpoint(self.config, checkpoint_dir=model_path, eval=True, use_deepspeed=True if device == "cuda" else False)
         self.model.to(device)
-        print("XTTS Loaded.", flush=True)
+        logger.info("XTTS Loaded.")
         return self
 
     def unload(self):
@@ -109,6 +111,7 @@ class XTTS_TTS:
                 logger.error(e)
 
     def create(self,**model_params):
+        logger.info("XTTS generating...")
 
         if not self.model:
             self.load()
@@ -137,6 +140,8 @@ class XTTS_TTS:
             response = self._generating(chunks)
         else:
             response = self._streaming(chunks)
+
+        logger.info("XTTS completed.")
         return response
 
 

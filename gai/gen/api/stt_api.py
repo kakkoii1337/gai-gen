@@ -4,8 +4,10 @@ from typing import List, Optional
 from fastapi.responses import StreamingResponse,JSONResponse
 from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
-import os,json,io
+import os,json,io,asyncio
 load_dotenv()
+
+os.environ["USE_SEMAPHORE"] = "True"
 
 # Configure Dependencies
 import dependencies
@@ -20,13 +22,12 @@ app=FastAPI(
     docs_url=swagger_url
     )
 dependencies.configure_cors(app)
-
-# Enforce Thread-Safety
-import asyncio
-semaphore = asyncio.Semaphore(1)
+semaphore = dependencies.configure_semaphore()
 
 from gai.gen import Gaigen
 generator = Gaigen.GetInstance()
+# Pre-load default model
+generator.load("whisper-transformers")
 
 ### ----------------- STT ----------------- ###
 from io import BytesIO
@@ -38,28 +39,33 @@ import numpy as np
 
 @app.post("/gen/v1/audio/transcriptions")
 async def _speech_to_text(model: str = Form("whisper-transformers"),file: UploadFile = File(...)):
-    gen = Gaigen.GetInstance().load(model)
-    print(f"Received file with filename: {file.filename} {file.content_type}")
-    content = await file.read()
-    
-    # Convert webm file to wav if necessary
-    if file.content_type == "audio/webm":
-        audio = BytesIO(content)
-        audio = AudioSegment.from_file(audio, format="webm")
+    try:
+        gen = Gaigen.GetInstance().load(model)
+        print(f"Received file with filename: {file.filename} {file.content_type}")
+        content = await file.read()
         
-        # Export audio to wav and get data
-        with tempfile.NamedTemporaryFile(delete=True) as tmp:
-            audio.export(tmp.name, format="wav")
+        # Convert webm file to wav if necessary
+        if file.content_type == "audio/webm":
+            audio = BytesIO(content)
+            audio = AudioSegment.from_file(audio, format="webm")
             
-            # Read wav file data into numpy array
-            wav_file_data = np.memmap(tmp.name, dtype='h', mode='r')
-        
-    else:
-        # If file is already in wav format, just read the data into numpy array
-        #wav_file_data = np.frombuffer(content, dtype='h')
-        wav_file_data = content
+            # Export audio to wav and get data
+            with tempfile.NamedTemporaryFile(delete=True) as tmp:
+                audio.export(tmp.name, format="wav")
+                
+                # Read wav file data into numpy array
+                wav_file_data = np.memmap(tmp.name, dtype='h', mode='r')
+            
+        else:
+            # If file is already in wav format, just read the data into numpy array
+            #wav_file_data = np.frombuffer(content, dtype='h')
+            wav_file_data = content
 
-    return gen.create(file=wav_file_data)
+        return gen.create(file=wav_file_data)    
+
+    except Exception as e:
+        logger.error(f"_create: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
     import uvicorn

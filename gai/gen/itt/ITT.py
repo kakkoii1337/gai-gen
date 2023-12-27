@@ -28,10 +28,10 @@ class ITT:
 
     def load(self):
         if "engine" in self.config:
-            logger.info(f"Using tts model {self.config['engine']}...")
+            logger.info(f"Using itt model {self.config['engine']}...")
         self.itt.load()
         return self
 
     def unload(self):
-        logger.info(f"Unloading tts model...")
+        logger.info(f"Unloading itt model...")
         self.itt.unload()
