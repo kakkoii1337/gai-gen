@@ -36,16 +36,36 @@ class ImageToTextRequest(BaseModel):
     class Config:
         extra = 'allow'  # Allow extra fields
 
+# @app.post("/gen/v1/vision/completions")
+# async def _image_to_text(request: ImageToTextRequest = Body(...)):
+#     gen = Gaigen.GetInstance().load(request.model)
+#     params = request.dict(exclude={"model", "messages","stream"})  # Get extra fields
+#     response = gen.create(
+#         messages=request.messages,
+#         stream=request.stream,
+#         **params
+#         )
+#     return response
+
 @app.post("/gen/v1/vision/completions")
 async def _image_to_text(request: ImageToTextRequest = Body(...)):
-    gen = Gaigen.GetInstance().load(request.model)
-    params = request.dict(exclude={"model", "messages","stream"})  # Get extra fields
-    response = gen.create(
-        messages=request.messages,
-        stream=request.stream,
-        **params
+    model = request.model
+    gen = Gaigen.GetInstance().load(model)
+    messages = request.messages
+    model_params = request.model_dump(exclude={"model", "messages","stream"})  # Get extra fields
+    stream = request.stream
+    if stream:
+        return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in gen.create(
+        messages=messages,
+        stream=True,
+        **model_params
+        ))
+    else:
+        return gen.create(
+        messages=messages,
+        stream=True,
+        **model_params
         )
-    return response
 
 if __name__ == "__main__":
     import uvicorn

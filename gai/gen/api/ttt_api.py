@@ -44,22 +44,22 @@ async def _text_to_text(request: ChatCompletionRequest = Body(...)):
         model = request.model
         messages = request.messages
         logger.debug(f"_create: model={model} messages={messages}")
-        model_params = request.dict(exclude={"model", "messages"})  
+        model_params = request.model_dump(exclude={"model", "messages"})  
         logger.debug(f"_create: model_params={model_params}")
         gen = Gaigen.GetInstance().load(model)
 
         stream = model_params.pop("stream", False)
         if stream:
-            return StreamingResponse(json.dumps(jsonable_encoder(chunk)) for chunk in gen.create(
+            return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in gen.create(
                 model=model,
-                messages=[message.dict() for message in messages],
+                messages=[message.model_dump() for message in messages],
                 stream=True,
                 **model_params
             ))
         else:
             return gen.create(
                 model=model,
-                messages=[message.dict() for message in messages],
+                messages=[message.model_dump() for message in messages],
                 stream=False,
                 **model_params
             )

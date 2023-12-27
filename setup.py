@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 setup(
     name='gai-gen',
-    version='0.9',
+    version='0.10',
     author="kakkoii1337",
     author_email="kakkoii1337@gmail.com",
     description = """Gai/Gen is the Universal Multi-Modal Wrapper Library for LLM. The library is designed to provide a simplified and unified interface for seamless switching between multi-modal open source language models on a local machine and OpenAI APIs.""",

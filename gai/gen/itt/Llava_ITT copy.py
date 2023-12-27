@@ -247,6 +247,23 @@ class Llava_ITT:
             logger.error(f"TransformersEngine: error={e} id={id} output={output} finish_reason={finish_reason}")
             raise Exception(e)
 
+    def _create(self, text, image_file, **model_params):
+        image_tensor = self._load_image_tensor(image_file)
+        conv = self._start_conversation(text,image_tensor)
+        prompt = conv.get_prompt()
+        self.prompt=prompt
+
+        input_ids = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(self.model.device)
+        stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+        keywords = [stop_str]
+        stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
+
+        stream = model_params.pop("stream",False)
+        if not stream:
+            return self._generating(input_ids,image_tensor,stopping_criteria, **model_params)
+        else:
+            return (chunk for chunk in self._streaming(input_ids,image_tensor,stopping_criteria, **model_params))
+
     def create(self, messages, **model_params):
         if not self.model:
             self.load()
@@ -271,20 +288,5 @@ class Llava_ITT:
         with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
             tmp.write(image_binary.read())
             tmp.seek(0)
-            image_tensor = self._load_image_tensor(tmp.name)
-            conv = self._start_conversation(text,image_tensor)
-            prompt = conv.get_prompt()
-            self.prompt=prompt
-
-            input_ids = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(self.model.device)
-            stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-            keywords = [stop_str]
-            stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
-
-            stream = model_params.pop("stream",False)
-            if not stream:
-                return self._generating(input_ids,image_tensor,stopping_criteria, **model_params)
-            else:
-                return (chunk for chunk in self._streaming(input_ids,image_tensor,stopping_criteria, **model_params))
-            
+            return self._create(text, tmp.name, **model_params)
                     
