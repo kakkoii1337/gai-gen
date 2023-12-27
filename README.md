@@ -19,26 +19,40 @@ The wrappers are organised under the `gen` folder according to 4 categories:
 
 ## Setting Up
 
-It is highly recommended that you install the following variants in separate virtual environments.
+It is highly recommended that you install each category in separate virtual environments.
 
 ```bash
 # Install library for text-to-text generation
-pip install gai-gen[TTT]
+pip install gai-lib-gen[TTT]
 
 # Install library for text-to-speech generation
-pip install gai-gen[TTS]
+pip install gai-lib-gen[TTS]
 
 # Install library for speech-to-text generation
-pip install gai-gen[STT]
+pip install gai-lib-gen[STT]
 
 # Install library for image-to-text generation
-pip install gai-gen[ITT]
+pip install gai-lib-gen[ITT]
 ```
 
 or
 
 ```bash
 git clone https://www.github.com/kakkoii1337/gai-gen
+
+cd gai-gen
+
+# Install library for text-to-text generation
+pip install ".[TTT]"
+
+# Install library for text-to-speech generation
+pip install ".[TTS]"
+
+# Install library for speech-to-text generation
+pip install ".[STT]"
+
+# Install library for image-to-text generation
+pip install ".[ITT]"
 ```
 
 ## Configuration

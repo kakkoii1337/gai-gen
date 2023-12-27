@@ -7,14 +7,14 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
     README = readme_file.read()
 
 setup(
-    name='gai-gen',
-    version='0.10',
+    name='gai-lib-gen',
+    version='0.11',
     author="kakkoii1337",
     author_email="kakkoii1337@gmail.com",
+    packages=find_packages(exclude=["tests*","gai/gen/api"]),
     description = """Gai/Gen is the Universal Multi-Modal Wrapper Library for LLM. The library is designed to provide a simplified and unified interface for seamless switching between multi-modal open source language models on a local machine and OpenAI APIs.""",
     long_description=README,
     long_description_content_type="text/markdown",
-    packages=find_packages(),
     classifiers=[
         'Programming Language :: Python :: 3.10',
         "Development Status :: 3 - Alpha",        
