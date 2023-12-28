@@ -2,7 +2,6 @@ from typing import List
 from gai.common import logging, generators_utils
 from gai.common.generators_utils import word_streamer
 logger = logging.getLogger(__name__)
-logger.setLevel("DEBUG")
 
 class TTT:
 

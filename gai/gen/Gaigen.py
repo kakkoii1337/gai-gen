@@ -14,9 +14,6 @@ class Gaigen:
 
     def __init__(self):
         """Virtually private constructor."""
-        logger.info("Gaigen.__init__")
-        logger.debug("Gaigen.__init__")
-
         if Gaigen.__instance is not None:
             raise Exception("Gaigen: This class is a singleton!")
         else:

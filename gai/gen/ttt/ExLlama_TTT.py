@@ -1,6 +1,6 @@
 import torch, gc, re,os
 from gai.common import logging, generators_utils
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
 from gai.common.utils import get_config_path
 from exllama.model import ExLlama, ExLlamaCache, ExLlamaConfig
 from exllama.tokenizer import ExLlamaTokenizer

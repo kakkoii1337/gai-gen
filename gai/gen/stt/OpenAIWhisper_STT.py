@@ -23,6 +23,7 @@ class OpenAIWhisper_STT:
         return self
 
     def unload(self):
+        self.client = None
         return self
 
     def create(self,**model_params):

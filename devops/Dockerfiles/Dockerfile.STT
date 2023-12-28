@@ -1,0 +1,27 @@
+FROM cu118-cp310-base:latest AS base
+
+# Step 1: Install utils
+RUN apt update -y && apt install -y git git-lfs ffmpeg python3-dev
+
+# Step 2: Create env variables
+ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64:/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+ENV MODEL_PATH="/app/models"
+RUN echo '{"app_dir":"/app"}' > /root/.gairc
+
+# Step 4: Install deps
+RUN pip install --upgrade pip
+RUN pip install gai-lib-gen[STT]==0.13
+
+# Step 5: Create mountpoint
+WORKDIR /app/models
+
+# Step 6: Copy files
+WORKDIR /app
+COPY working/gai.json .
+COPY working/api .
+
+# Step 6: Start server
+CMD ["python", "stt_api.py"]
+
+
+

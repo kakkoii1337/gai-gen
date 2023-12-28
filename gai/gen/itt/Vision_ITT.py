@@ -1,3 +1,9 @@
+import os,openai
+from openai import OpenAI
+from gai.common import generators_utils, logging
+logger = logging.getLogger(__name__)
+
+
 class Vision_ITT:
     def __init__(self, model_config):
         self.client = None
@@ -6,19 +12,18 @@ class Vision_ITT:
     def load(self):
         from dotenv import load_dotenv        
         load_dotenv()
-        import os
         class MissingOpenAIApiKeyException(Exception):
             pass
         if 'OPENAI_API_KEY' not in os.environ:
             msg = "OPENAI_API_KEY not found in environment variables. GPT-4 will not be available."
             raise MissingOpenAIApiKeyException(msg)
-        import openai
         openai.api_key = os.environ["OPENAI_API_KEY"]
-        from openai import OpenAI
         self.client = OpenAI()
+        return self
 
     def unload(self):
         self.client = None
+        return self
 
     def gen(self, text, image_file, **model_params):
         import base64

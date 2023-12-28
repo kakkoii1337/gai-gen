@@ -37,6 +37,7 @@ class MessageRequest(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: Optional[str] = None
     messages: List[MessageRequest]
+    stream: Optional[bool] = False
     class Config:
         extra = 'allow'  # Allow extra fields
     
@@ -46,9 +47,8 @@ async def _text_to_text(request: ChatCompletionRequest = Body(...)):
         model = request.model
         messages = request.messages
         model_params = request.model_dump(exclude={"model", "messages"})  
+        stream = request.stream
         gen = Gaigen.GetInstance().load(model)
-
-        stream = model_params.pop("stream", False)
         if stream:
             return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in gen.create(
                 model=model,

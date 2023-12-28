@@ -1,6 +1,7 @@
 from gai.gen.tts.OpenAI_TTS import OpenAI_TTS
 from gai.gen.tts.XTTS_TTS import XTTS_TTS
-from gai.common import logger, generators_utils
+from gai.common import logging, generators_utils
+logger = logging.getLogger(__name__)
 
 class TTS:
     
