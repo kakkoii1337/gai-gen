@@ -28,25 +28,25 @@ class ExLlama_TTT:
         "stream"
         ]
 
-    def get_model_params(self, **kwargs):
-        params={
-            "max_new_tokens":25,
-            "temperature":0.7,
-            "top_p": 1,
-            "top_k": 3
-        }        
-        return {**params,**kwargs}
+    # def get_model_params(self, **kwargs):
+    #     params={
+    #         "max_new_tokens":25,
+    #         "temperature":0.7,
+    #         "top_p": 1,
+    #         "top_k": 3
+    #     }        
+    #     return {**params,**kwargs}
 
-    def __init__(self,model_config):
-        if (model_config is None):
-            raise Exception("exllama_engine: model_config is required")
-        if "model_path" not in model_config or model_config["model_path"] is None:
+    def __init__(self,gai_config):
+        if (gai_config is None):
+            raise Exception("exllama_engine: gai_config is required")
+        if "model_path" not in gai_config or gai_config["model_path"] is None:
             raise Exception("exllama_engine: model_path is required")
-        if "model_basename" not in model_config or model_config["model_basename"] is None:
+        if "model_basename" not in gai_config or gai_config["model_basename"] is None:
             raise Exception("exllama_engine: model_basename is required")
 
-        self.config = model_config
-        self.model_filepath = os.path.join(get_config_path(), model_config["model_path"], model_config["model_basename"])+".safetensors"
+        self.gai_config = gai_config
+        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])+".safetensors"
         self.model = None
         self.tokenizer = None
         self.client = None
@@ -56,15 +56,15 @@ class ExLlama_TTT:
         logger.info(f"exllama_engine.load: Loading model from {self.model_filepath}")
 
         # model
-        model_config_path = os.path.join(get_config_path(),self.config["model_path"], 'config.json')
+        model_config_path = os.path.join(get_config_path(),self.gai_config["model_path"], 'config.json')
 
         exllama_config = ExLlamaConfig(model_config_path)        
-        exllama_config.max_seq_len = self.config["max_seq_len"]
+        exllama_config.max_seq_len = self.gai_config["max_seq_len"]
         exllama_config.model_path = self.model_filepath
         self.model = ExLlama(exllama_config)
 
         # tokenizer
-        tokenizer_path= os.path.join(get_config_path(),self.config["model_path"], 'tokenizer.model')
+        tokenizer_path= os.path.join(get_config_path(),self.gai_config["model_path"], 'tokenizer.model')
         self.tokenizer = ExLlamaTokenizer(tokenizer_path)         
 
         # generator
@@ -114,10 +114,10 @@ class ExLlama_TTT:
 
         self.client.end_beam_search()
 
-        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = self.model.config.max_seq_len)
+        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = self.model.gai_config.max_seq_len)
         self.client.gen_begin(ids, mask = mask)
 
-        max_new_tokens = min(max_new_tokens, self.client.model.config.max_seq_len - ids.shape[1])
+        max_new_tokens = min(max_new_tokens, self.client.model.gai_config.max_seq_len - ids.shape[1])
 
         finish_reason="length"
         eos = torch.zeros((ids.shape[0],), dtype = torch.bool)
@@ -144,7 +144,7 @@ class ExLlama_TTT:
             model_params["temperature"]=10e-10
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         logger.debug(f"exllama_engine.generate: model_params={model_params}")
         
         input_count=self.token_count(prompt)
@@ -201,7 +201,7 @@ class ExLlama_TTT:
                     ))
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
             usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
@@ -216,7 +216,8 @@ class ExLlama_TTT:
 
         logger.debug(f"exllama_engine.streaming: prompt={prompt}")
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
+
         logger.debug(f"model_params: {model_params}")
 
         input_count=self.token_count(prompt)
@@ -302,7 +303,7 @@ class ExLlama_TTT:
                     )
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion.chunk",
             system_fingerprint=None,
             usage=None
@@ -325,7 +326,7 @@ class ExLlama_TTT:
             self.load()
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         stream = model_params.pop("stream", False)
 
         if not stream:

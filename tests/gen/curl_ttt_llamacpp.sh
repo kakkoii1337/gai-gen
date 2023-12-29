@@ -3,11 +3,10 @@ curl -X POST \
     -H 'Content-Type: application/json' \
     -s \
     -N \
-    -d "{\"model\":\"gpt-4\", \
+    -d "{\"model\":\"mistral7b-llamacpp\", \
         \"messages\": [ \
             {\"role\": \"user\",\"content\": \"Tell me a story\"}, \
             {\"role\": \"assistant\",\"content\": \"\"} \
         ],\
-        \"stream\":true \
-        }" \
+        \"stream\":true}" \
         | python print_ttt_delta.py

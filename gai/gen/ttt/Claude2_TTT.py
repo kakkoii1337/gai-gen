@@ -17,15 +17,15 @@ class Claude2_TTT:
         "stream"
     ]
 
-    def get_model_params(self, **kwargs):
-        params={
-            "max_tokens_to_sample":25
-        }        
-        return {**params,**kwargs}
+    # def get_model_params(self, **kwargs):
+    #     params={
+    #         "max_tokens_to_sample":25
+    #     }        
+    #     return {**params,**kwargs}
 
-    def __init__(self,model_config):
+    def __init__(self,gai_config):
         self.client = None
-        self.config = model_config
+        self.gai_config = gai_config
 
     def load(self):
         from dotenv import load_dotenv        
@@ -90,7 +90,7 @@ class Claude2_TTT:
                     ))
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
             usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
@@ -132,14 +132,14 @@ class Claude2_TTT:
                         )
                 ],
                 created=created,
-                model=self.config["model_name"],
+                model=self.gai_config["model_name"],
                 object="chat.completion.chunk",
                 system_fingerprint=None,
                 usage=None
                 )
             return response
         except Exception as e:
-            logger.error(f"Claude2Engine: error={e} id={id} output={output} finish_reason={finish_reason}")
+            logger.error(f"Claude2_TTT: error={e} id={id} output={output} finish_reason={finish_reason}")
             raise Exception(e)
 
 
@@ -150,7 +150,8 @@ class Claude2_TTT:
             self.load()
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params={**self.gai_config["hyperparameters"], **model_params}
+        logger.debug(f"Claude2_TTT: model_params={model_params}")
         stream = model_params.pop("stream", False)
 
         if not stream:

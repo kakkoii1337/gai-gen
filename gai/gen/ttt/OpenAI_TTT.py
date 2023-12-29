@@ -18,21 +18,22 @@ class OpenAI_TTT:
         'n',
         ]
 
-    def get_model_params(self, **kwargs):
-        params = {
-            'max_tokens': 25,
-            'temperature': 0.7,
-            'top_p': 1,
-            'presence_penalty': 0.0,
-            'frequency_penalty': 0.0,
-            'stop': None,
-            'logit_bias': {},
-            'n': 1
-        }
-        params = {**params,**kwargs}
-        return params
+    # def get_model_params(self, **kwargs):
+    #     params = {
+    #         'max_tokens': 25,
+    #         'temperature': 0.7,
+    #         'top_p': 1,
+    #         'presence_penalty': 0.0,
+    #         'frequency_penalty': 0.0,
+    #         'stop': None,
+    #         'logit_bias': {},
+    #         'n': 1
+    #     }
+    #     params = {**params,**kwargs}
+    #     return params
 
-    def __init__(self,model_config):
+    def __init__(self,gai_config):
+        self.gai_config = gai_config
         self.client = None
         pass
 
@@ -65,8 +66,11 @@ class OpenAI_TTT:
             self.load()
 
         # discard model parameter. Use constructor instead.
-        model_params.pop("model",None)
         stream = model_params.pop('stream',False)
+        model_params=generators_utils.filter_params(model_params, self.param_whitelist)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
+        model_params.pop("model",None)
+        logger.debug(f"OpenAI_TTT.create: model_params={model_params}")
 
         self.prompt = self.apply_template(messages)
 

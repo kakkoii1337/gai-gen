@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class LlamaCpp_TTT:
 
     param_whitelist=[
-        'max_new_tokens',
+        'max_tokens',
         'stopping_criteria',
         'temperature',
         'top_k',
@@ -21,32 +21,32 @@ class LlamaCpp_TTT:
         'stream'
         ]
 
-    def get_model_params(self, **kwargs):
-        # llama_cpp uses max_tokens instead of max_new_tokens
-        # Transform max_new_tokens to max_tokens if max_new_tokens is in kwargs
-        if "max_new_tokens" in kwargs:
-            kwargs["max_tokens"]=kwargs["max_new_tokens"]
-            kwargs.pop("max_new_tokens")
+    # def get_model_params(self, **kwargs):
+    #     # # llama_cpp uses max_tokens instead of max_new_tokens
+    #     # # Transform max_new_tokens to max_tokens if max_new_tokens is in kwargs
+    #     # if "max_new_tokens" in kwargs:
+    #     #     kwargs["max_tokens"]=kwargs["max_new_tokens"]
+    #     #     kwargs.pop("max_new_tokens")
 
-        params = {
-            'max_tokens': 25,
-            'temperature': 1.31,
-            'top_k': 49,
-            'top_p': 0.14,
-        }
-        params = {**params,**kwargs}
-        return params
+    #     params = {
+    #         'max_tokens': 25,
+    #         'temperature': 1.31,
+    #         'top_k': 49,
+    #         'top_p': 0.14,
+    #     }
+    #     params = {**params,**kwargs}
+    #     return params
 
-    def __init__(self,model_config):
-        if (model_config is None):
-            raise Exception("llamacpp_engine: model_config is required")
-        if "model_path" not in model_config or model_config["model_path"] is None:
+    def __init__(self,gai_config):
+        if (gai_config is None):
+            raise Exception("llamacpp_engine: gai_config is required")
+        if "model_path" not in gai_config or gai_config["model_path"] is None:
             raise Exception("llamacpp_engine: model_path is required")
-        if "model_basename" not in model_config or model_config["model_basename"] is None:
+        if "model_basename" not in gai_config or gai_config["model_basename"] is None:
             raise Exception("llamacpp_engine: model_basename is required")
 
-        self.config = model_config
-        self.model_filepath = os.path.join(get_config_path(), model_config["model_path"], model_config["model_basename"])
+        self.gai_config = gai_config
+        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])
         self.model = None
         self.tokenizer = None
         self.client = None
@@ -54,7 +54,7 @@ class LlamaCpp_TTT:
     def load(self):
         logger.info(f"exllama_engine.load: Loading model from {self.model_filepath}")
         with suppress_stdout_stderr():
-            self.client = Llama(model_path=self.model_filepath, verbose=False, n_ctx=self.config["max_seq_len"])
+            self.client = Llama(model_path=self.model_filepath, verbose=False, n_ctx=self.gai_config["max_seq_len"])
         return self
 
     def unload(self):
@@ -112,7 +112,7 @@ class LlamaCpp_TTT:
                     ))
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
             usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
@@ -149,14 +149,14 @@ class LlamaCpp_TTT:
                         )
                 ],
                 created=created,
-                model=self.config["model_name"],
+                model=self.gai_config["model_name"],
                 object="chat.completion.chunk",
                 system_fingerprint=None,
                 usage=None
                 )
             return response
         except Exception as e:
-            logger.error(f"LlamaCppEngine: error={e} id={id} output={output} finish_reason={finish_reason}")
+            logger.error(f"LlamaCpp_TTT: error={e} id={id} output={output} finish_reason={finish_reason}")
             raise Exception(e)
 
     def create(self,messages,**model_params):
@@ -165,7 +165,8 @@ class LlamaCpp_TTT:
             self.load()
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params={**self.gai_config["hyperparameters"],**model_params}
+        logger.debug(f"LlamaCpp_TTT.create: model_params={model_params}")
         stream = model_params.pop("stream", False)
 
         if not stream:

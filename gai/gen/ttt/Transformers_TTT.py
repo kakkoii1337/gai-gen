@@ -146,7 +146,7 @@ class Transformers_TTT:
         logger.debug(f"transformers_engine.generate: prompt={prompt}")
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         logger.debug(f"transformers_engine.generate: model_params={model_params}")
 
         input_count=self.token_count(prompt)
@@ -206,7 +206,7 @@ class Transformers_TTT:
             self.load()
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         stream = model_params.pop("stream", False)
 
         if not stream:

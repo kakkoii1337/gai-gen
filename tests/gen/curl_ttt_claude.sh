@@ -8,6 +8,5 @@ curl -X POST \
             {\"role\": \"user\",\"content\": \"Tell me a story\"}, \
             {\"role\": \"assistant\",\"content\": \"\"} \
         ],\
-        \"max_tokens_to_sample\":25,\
         \"stream\":true}" \
         | python print_ttt_delta.py        

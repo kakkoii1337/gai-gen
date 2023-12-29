@@ -3,7 +3,17 @@
         "gpt-4": {
             "type": "ttt",
             "engine": "OpenAI_TTT",
-            "api_key": "OPENAI_API_KEY"
+            "api_key": "OPENAI_API_KEY",
+            "hyperparameters": {
+                "max_tokens": 100,
+                "temperature": 0.7,
+                "top_p": 1,
+                "presence_penalty": 0.0,
+                "frequency_penalty": 0.0,
+                "stop": null,
+                "logit_bias": {},
+                "n": 1
+            }
         },
         "mistral7b-exllama": {
             "type": "ttt",
@@ -12,13 +22,23 @@
             "model_path": "models/Mistral-7B-Instruct-v0.1-GPTQ",
             "model_basename": "model",
             "max_seq_len": 8192,
-            "stopping_words": []
+            "stopping_words": [],
+            "hyperparameters": {
+                "max_new_tokens": 4096,
+                "temperature": 0.7,
+                "top_p": 1,
+                "top_k": 3
+            }
         },
         "claude2-100k": {
             "type": "ttt",
             "model_name": "Claude2",
             "engine": "Claude2_TTT",
-            "api_key": "CLAUDE_API_KEY"
+            "api_key": "CLAUDE_API_KEY",
+            "hyperparameters": {
+                "temperature": 0.9,
+                "max_tokens_to_sample": 10000
+            }
         },
         "mistral7b-llamacpp": {
             "type": "ttt",
@@ -27,7 +47,13 @@
             "model_path": "models/Mistral-7B-Instruct-v0.1-GGUF",
             "model_basename": "mistral-7b-instruct-v0.1.Q4_K_M.gguf",
             "max_seq_len": 8192,
-            "stopping_words": []
+            "stopping_words": [],
+            "hyperparameters": {
+                "max_tokens": 100,
+                "temperature": 1.31,
+                "top_k": 49,
+                "top_p": 0.14
+            }
         },
         "llama2-transformers": {
             "type": "ttt",
@@ -36,7 +62,14 @@
             "model_path": "models/Llama-2-7b-chat-hf",
             "model_basename": "",
             "max_seq_len": 2048,
-            "stopping_words": []
+            "stopping_words": [],
+            "hyperparameters": {
+                "max_new_tokens": 1024,
+                "temperature": 1.31,
+                "top_k": 49,
+                "top_p": 0.14,
+                "do_sample": true
+            }
         },
         "openai-whisper": {
             "type": "stt",
