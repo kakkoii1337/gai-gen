@@ -34,24 +34,24 @@ class Transformers_TTT:
         params = {**params,**kwargs}
         return params
 
-    def __init__(self,model_config):
-        if (model_config is None):
-            raise Exception("transformers_engine: model_config is required")
-        if "model_path" not in model_config or model_config["model_path"] is None:
+    def __init__(self,gai_config):
+        if (gai_config is None):
+            raise Exception("transformers_engine: gai_config is required")
+        if "model_path" not in gai_config or gai_config["model_path"] is None:
             raise Exception("transformers_engine: model_path is required")
-        if "model_basename" not in model_config or model_config["model_basename"] is None:
+        if "model_basename" not in gai_config or gai_config["model_basename"] is None:
             raise Exception("transformers_engine: model_basename is required")
 
-        self.config = model_config
-        self.model_filepath = os.path.join(get_config_path(), model_config["model_path"], model_config["model_basename"])
+        self.gai_config = gai_config
+        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])
         self.model = None
         self.tokenizer = None
         self.generator = None
 
     def load(self):
-        logger.info(f"transformers_enginer: Loading model from {self.config['model_path']}")
+        logger.info(f"transformers_enginer: Loading model from {self.gai_config['model_path']}")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(get_config_path(),self.config['model_path']))
+        self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(get_config_path(),self.gai_config['model_path']))
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         n_gpus = torch.cuda.device_count()
@@ -63,7 +63,7 @@ class Transformers_TTT:
         )
         max_memory = f'{40960}MB'
         self.model = AutoModelForCausalLM.from_pretrained(
-            os.path.join(get_config_path(),self.config['model_path']), 
+            os.path.join(get_config_path(),self.gai_config['model_path']), 
             quantization_config=bnb_config,
             device_map="auto",
             max_memory={i: max_memory for i in range(n_gpus )},)
@@ -135,7 +135,7 @@ class Transformers_TTT:
                     ))
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
             usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
@@ -189,7 +189,7 @@ class Transformers_TTT:
                         )
                 ],
                 created=created,
-                model=self.config["model_name"],
+                model=self.gai_config["model_name"],
                 object="chat.completion.chunk",
                 system_fingerprint=None,
                 usage=None

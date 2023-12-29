@@ -1,3 +1,4 @@
+VERSION='0.15'
 from setuptools import setup, find_packages
 from os.path import abspath
 import subprocess, os, sys
@@ -8,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 setup(
     name='gai-lib-gen',
-    version='0.13',
+    version=VERSION,
     author="kakkoii1337",
     author_email="kakkoii1337@gmail.com",
     packages=find_packages(exclude=["tests*","gai/gen/api"]),

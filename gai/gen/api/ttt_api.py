@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 import asyncio
 import os,json,io
 load_dotenv()
-os.environ["LOG_LEVEL"] = "DEBUG"
-os.environ["USE_SEMAPHORE"] = "True"
 
 # Configure Dependencies
 import dependencies
@@ -46,7 +44,7 @@ async def _text_to_text(request: ChatCompletionRequest = Body(...)):
     try:
         model = request.model
         messages = request.messages
-        model_params = request.model_dump(exclude={"model", "messages"})  
+        model_params = request.model_dump(exclude={"model", "messages","stream"})  
         stream = request.stream
         gen = Gaigen.GetInstance().load(model)
         if stream:
