@@ -5,7 +5,8 @@ logger = logging.getLogger(__name__)
 
 
 class Vision_ITT:
-    def __init__(self, model_config):
+    def __init__(self, gai_config):
+        self.gai_config = gai_config
         self.client = None
         pass
 
@@ -51,6 +52,7 @@ class Vision_ITT:
         if not self.client:
             self.load()
         model_params.pop("model",None)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         stream = model_params.pop("stream",False)
 
         if stream:

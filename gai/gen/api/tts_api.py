@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 import os,json,io,asyncio
 load_dotenv()
 
-os.environ["USE_SEMAPHORE"] = "true"
-
 # Configure Dependencies
 import dependencies
 dependencies.configure_logging()

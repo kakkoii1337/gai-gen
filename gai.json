@@ -71,6 +71,12 @@
                 "do_sample": true
             }
         },
+        "deepseek-transformers": {
+            "type": "ttt",
+            "engine": "Transformers_TTT",
+            "model_path": "models/deepseek-coder-6.7b-instruct",
+            "model_basename": ""
+        },
         "openai-whisper": {
             "type": "stt",
             "engine": "OpenAIWhisper_STT",
@@ -84,7 +90,12 @@
             "model_path": "models/whisper-large-v3",
             "model_basename": "",
             "max_seq_len": 128,
-            "stopping_words": []
+            "stopping_words": [],
+            "hyperparameters": {
+                "chunk_length_s": 30,
+                "batch_size": 16,
+                "max_new_tokens": 128
+            }
         },
         "openai-tts-1": {
             "type": "tts",
@@ -104,7 +115,11 @@
             "type": "itt",
             "engine": "Vision_ITT",
             "model_name": "OpenAI Vision",
-            "api_key": "OPENAI_API_KEY"
+            "api_key": "OPENAI_API_KEY",
+            "hyperparameters": {
+                "temperature": 0.2,
+                "max_tokens": 512
+            }
         },
         "llava-transformers": {
             "type": "itt",
@@ -113,7 +128,15 @@
             "model_path": "models/llava-v1.5-7b",
             "model_basename": "llava-v1.5-7b",
             "max_seq_len": 128,
-            "stopping_words": []
+            "stopping_words": [],
+            "model_base": null,
+            "load_8bit": false,
+            "load_4bit": true,
+            "image_aspect_ratio": "pad",
+            "hyperparameters": {
+                "temperature": 0.2,
+                "max_new_tokens": 512
+            }
         }
     }
 }

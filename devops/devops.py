@@ -50,6 +50,7 @@ class Deploy(cmd.Cmd):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt'] ")
             return
+        self.do_publish(svc)
         version =self.get_version()
         if (svc != "itt"):
             self._cmd("rm -rf working && mkdir working")
@@ -93,7 +94,9 @@ class Deploy(cmd.Cmd):
         version=self.get_version()
         self.do_build(svc)
         self._cmd(f"""docker tag gai-{svc}:{version} kakkoii1337/gai-{svc}:{version}""")        
+        self._cmd(f"""docker tag gai-{svc}:{version} kakkoii1337/gai-{svc}:latest""")        
         self._cmd(f"""docker push kakkoii1337/gai-{svc}:{version}""")
+        self._cmd(f"""docker push kakkoii1337/gai-{svc}:latest""")
 
     def do_ps(self,ignored):
         self._cmd(f"""docker ps -a""")
@@ -103,7 +106,11 @@ class Deploy(cmd.Cmd):
             print("Please specify one from ['ttt','stt','tts','itt'] ")
             return
         self._cmd("cd ~/github/kakkoii1337/gai-gen && python setup.py sdist")
-        self._cmd("cd ~/github/kakkoii1337/gai-gen && twine upload dist/*")        
+        #self._cmd("""cd ~/github/kakkoii1337/gai-gen && twine upload dist/*""")        
+        self._cmd("""cd ~/github/kakkoii1337/gai-gen && for file in dist/*; do
+                        twine upload "$file" || true
+                    done
+                  """)        
 
 if __name__ == "__main__":
     Deploy().cmdloop()

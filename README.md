@@ -59,16 +59,17 @@ It is highly recommended that you install each category in separate virtual envi
 
 ```bash
 # Install library for text-to-text generation
-pip install gai-lib-gen[TTT]
+pip install "gai-lib-gen[TTT]"
 
 # Install library for text-to-speech generation
-pip install gai-lib-gen[TTS]
+pip install "gai-lib-gen[TTS]"
 
 # Install library for speech-to-text generation
-pip install gai-lib-gen[STT]
+pip install "gai-lib-gen[STT]"
 
-# Install library for image-to-text generation
-pip install gai-lib-gen[ITT]
+# Install library for image-to-text generation (install LLaVA separately)
+pip install "gai-lib-gen[ITT]"
+git clone https://github.com/haotian-liu/LLaVA && cd LLaVA && pip install -e .
 ```
 
 ### Configuration
@@ -166,10 +167,10 @@ print(response)
 
 ### Examples
 
--   [Text-to-Text Generation](/docs/TTT.ipynb)
--   [Speech-to-Text Generation](/docs/STT.ipynb)
--   [Text-to-Speech Generation](/docs/TTS.ipynb)
--   [Image-to-Text Generation](/docs/ITT.ipynb)
+-   [Text-to-Text Generation (OpenAI GPT4 vs Open-Source Mistra7B)](/docs/TTT.ipynb)
+-   [Speech-to-Text Generation (OpenAI Whisper vs Open-Source Whisper)](/docs/STT.ipynb)
+-   [Text-to-Speech Generation (OpenAI Speech vs Open-Source xTTS)](/docs/TTS.ipynb)
+-   [Image-to-Text Generation (OpenAI Vision vs Open-Source Llava)](/docs/ITT.ipynb)
 
 ## 5. Using Gai as a Service
 

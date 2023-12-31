@@ -24,10 +24,10 @@ import re,os
 
 class Llava_ITT:
 
-    def __init__(self, model_config):
-        self.model_path = os.path.join(get_config_path(),model_config['model_path'])
-        self.model_name = model_config['model_name']
-        self.config = None
+    def __init__(self, gai_config):
+        self.model_path = os.path.join(get_config_path(),gai_config['model_path'])
+        self.model_name = gai_config['model_name']
+        self.gai_config = gai_config
         self.model = None
         self.tokenizer = None
         self.image_processor = None
@@ -35,28 +35,27 @@ class Llava_ITT:
 
     def load(self):
         import argparse
-        self.config = argparse.Namespace(
+        self.llava_config = argparse.Namespace(
             model_path=self.model_path,
             model_name=self.model_name,
-            model_base=None,
+            model_base=self.gai_config["model_base"],
             device="cuda",
             conv_mode=None,
-            temperature=0.2,
-            max_new_tokens=512,
-            load_8bit=False,
-            load_4bit=True,
+            load_8bit=self.gai_config["load_8bit"],
+            load_4bit=self.gai_config["load_4bit"],
             debug=False,
-            image_aspect_ratio='pad'
+            image_aspect_ratio=self.gai_config["image_aspect_ratio"],
+            **self.gai_config["hyperparameters"]
         )
         setattr(torch.nn.Linear, "reset_parameters", lambda self: None)
         setattr(torch.nn.LayerNorm, "reset_parameters", lambda self: None)
         tokenizer, model, image_processor, context_len = load_pretrained_model(
-            self.config.model_path, 
-            self.config.model_base, 
-            self.config.model_name, 
-            self.config.load_8bit, 
-            self.config.load_4bit, 
-            device=self.config.device
+            self.llava_config.model_path, 
+            self.llava_config.model_base, 
+            self.llava_config.model_name, 
+            self.llava_config.load_8bit, 
+            self.llava_config.load_4bit, 
+            device=self.llava_config.device
             )
         
         self.tokenizer = tokenizer
@@ -68,13 +67,15 @@ class Llava_ITT:
     def unload(self):
         logger.info(f"LlavaITT: Unloading model...")        
         try:
-            del self.config
+            del self.gai_config
+            del self.llava_config
             del self.model
             del self.tokenizer
             del self.image_processor
         except :
             pass
-        self.config = None
+        self.gai_config = None
+        self.llava_config = None
         self.model = None
         self.tokenizer = None
         self.image_processor = None
@@ -87,7 +88,7 @@ class Llava_ITT:
             image_content = f.read()
             image = Image.open(BytesIO(image_content)).convert('RGB')
 
-        image_tensor = process_images([image], self.image_processor, self.config)
+        image_tensor = process_images([image], self.image_processor, self.llava_config)
         if type(image_tensor) is list:
             image_tensor = [image.to(self.model.device, dtype=torch.float16) for image in image_tensor]
         else:
@@ -127,30 +128,32 @@ class Llava_ITT:
         return input_ids, image_tensor, stopping_criteria
     
     def _generating(self, input_ids, image_tensor, stopping_criteria, **model_params):
+        model_params = {**self.gai_config["hyperparameters"], **model_params}
         id = str(uuid4())       
         with torch.inference_mode():
+            temperature = self.gai_config["hyperparameters"]["temperature"]
             output_ids = self.model.generate(
                 input_ids,
                 images=image_tensor,
-                do_sample=True if self.config.temperature > 0 else False,
-                temperature=self.config.temperature,
-                max_new_tokens=self.config.max_new_tokens,
+                do_sample=True if temperature > 0 else False,
                 use_cache=True,
-                stopping_criteria=[stopping_criteria])
+                stopping_criteria=[stopping_criteria],
+                **model_params
+                )
             outputs = self.tokenizer.decode(output_ids[0, input_ids.shape[1]:]).strip()
             response = self.parse_generating_output(id=id, output=outputs, finish_reason='stop')
             return response
 
     def _streaming(self, input_ids, image_tensor, stopping_criteria, **model_params):
         id = str(uuid4())       
+        model_params = {**self.gai_config["hyperparameters"], **model_params}
         with torch.inference_mode():
             streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
+            temperature = self.gai_config["hyperparameters"]["temperature"]
             thread = Thread(target=self.model.generate, kwargs={
                 "input_ids":input_ids,
                 "images":image_tensor,
-                "do_sample":True if self.config.temperature > 0 else False,
-                "temperature":self.config.temperature,
-                "max_new_tokens":self.config.max_new_tokens,
+                "do_sample":True if temperature > 0 else False,
                 "use_cache":True,
                 "stopping_criteria":[stopping_criteria],
                 "streamer":streamer,
@@ -203,7 +206,7 @@ class Llava_ITT:
                     ))
             ],
             created=created,
-            model=self.config.model_name,
+            model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
             usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
@@ -226,7 +229,7 @@ class Llava_ITT:
                         )
                 ],
                 created=created,
-                model=self.config.model_name,
+                model=self.gai_config["model_name"],
                 object="chat.completion.chunk",
                 system_fingerprint=None,
                 usage=None
@@ -240,24 +243,28 @@ class Llava_ITT:
         if not self.model:
             self.load()
         if (len(messages) == 0):
-            raise("No messages to create")
+            raise Exception("No messages to create")
         if (len(messages) > 1):
-            raise("Only one message can be created at a time")
+            raise Exception("Only one message can be created at a time")
         model_params.pop("model",None)
         message = messages[0]
         if message['role'] != 'user':
-            raise("Only user messages are supported")
+            raise Exception("Only user messages are supported")
         text = message['content'][0]['text']
         encoded_string = message['content'][1]['image_url']['url']
 
         # remove the 'data:image/jpeg;base64,' part from your string if it's there
-        if encoded_string.startswith('data:image/jpeg;base64,'):
-            encoded_string = encoded_string[len('data:image/jpeg;base64,'):]
+        # if encoded_string.startswith('data:image/jpeg;base64,'):
+        #     encoded_string = encoded_string[len('data:image/jpeg;base64,'):]
+        match = re.match('^data:image/(?P<type>.+);base64,', encoded_string)
+        if match:
+            image_type = match.group('type')
+            encoded_string = re.sub('^data:image/.+;base64,', '', encoded_string)
         decoded_string = base64.b64decode(encoded_string)
         image_binary = io.BytesIO(decoded_string)
 
         import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=image_type) as tmp:
             tmp.write(image_binary.read())
             tmp.seek(0)
             image_tensor = self._load_image_tensor(tmp.name)

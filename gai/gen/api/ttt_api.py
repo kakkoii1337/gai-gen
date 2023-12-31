@@ -33,7 +33,7 @@ class MessageRequest(BaseModel):
     role: str
     content: str
 class ChatCompletionRequest(BaseModel):
-    model: Optional[str] = None
+    model: Optional[str] = "mistral7b-exllama"
     messages: List[MessageRequest]
     stream: Optional[bool] = False
     class Config:

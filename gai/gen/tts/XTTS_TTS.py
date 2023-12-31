@@ -7,7 +7,9 @@ import torch
 
 class XTTS_TTS:
 
-    def __init__(self, model_config):
+    def __init__(self, gai_config):
+        self.gai_config = gai_config
+        self.xtts_config = None
         self.model = None
         self.tokenizer = None
         pass
@@ -18,19 +20,18 @@ class XTTS_TTS:
         
         os.environ["COQUI_TOS_AGREED"] = "1"
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        base_dir = f"{get_config_path()}/models"
-        model_path=os.path.join(base_dir, "tts/tts_models--multilingual--multi-dataset--xtts_v2")
+        model_path=os.path.join(get_config_path(),self.gai_config["model_path"])
         config_path = os.path.join(model_path,"config.json")
 
         # Load Config
         from TTS.tts.configs.xtts_config import XttsConfig
-        self.config = XttsConfig()
-        self.config.load_json(config_path)
+        self.xtts_config = XttsConfig()
+        self.xtts_config.load_json(config_path)
 
         # Load Model
         from TTS.tts.models.xtts import Xtts
-        self.model = Xtts.init_from_config(self.config)
-        self.model.load_checkpoint(self.config, checkpoint_dir=model_path, eval=True, use_deepspeed=True if device == "cuda" else False)
+        self.model = Xtts.init_from_config(self.xtts_config)
+        self.model.load_checkpoint(self.xtts_config, checkpoint_dir=model_path, eval=True, use_deepspeed=True if device == "cuda" else False)
         self.model.to(device)
         logger.info("XTTS Loaded.")
         return self

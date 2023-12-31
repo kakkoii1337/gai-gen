@@ -1,4 +1,4 @@
-VERSION='0.15'
+VERSION='0.19'
 from setuptools import setup, find_packages
 from os.path import abspath
 import subprocess, os, sys
@@ -12,7 +12,7 @@ setup(
     version=VERSION,
     author="kakkoii1337",
     author_email="kakkoii1337@gmail.com",
-    packages=find_packages(exclude=["tests*","gai/gen/api"]),
+    packages=find_packages(exclude=["tests*","gai.gen.api"]),
     description = """Gai/Gen is the Universal Multi-Modal Wrapper Library for LLM. The library is designed to provide a simplified and unified interface for seamless switching between multi-modal open source language models on a local machine and OpenAI APIs.""",
     long_description=README,
     long_description_content_type="text/markdown",

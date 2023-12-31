@@ -5,7 +5,8 @@ logger = logging.getLogger(__name__)
 
 class OpenAIWhisper_STT:
 
-    def __init__(self,model_config):
+    def __init__(self,gai_config):
+        self.gai_config = gai_config
         self.client = None
         pass
 
