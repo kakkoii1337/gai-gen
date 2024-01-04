@@ -1,4 +1,4 @@
-FROM cu118-cp310-base:latest AS base
+FROM kakkoii1337/cu118-cp310-base:latest AS base
 
 # Step 1: Install utils
 RUN apt update -y && apt install -y git git-lfs ffmpeg python3-dev
@@ -8,19 +8,22 @@ ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64:/usr/lib/wsl/lib:$LD_LIBRARY_PAT
 ENV MODEL_PATH="/app/models"
 RUN echo '{"app_dir":"/app"}' > /root/.gairc
 
-# Step 4: Install deps
-RUN pip install --upgrade pip
-RUN pip install gai-lib-gen[TTS]==0.13
+# Step 3: Install deps
+WORKDIR /app
+COPY working/requirements_*.txt /app/
+RUN pip install pip==23.3.1
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements_tts.txt
+
+# Step 4: Install apps
+RUN pip install --upgrade --no-deps gai-lib-gen[TTS]
+COPY working/gai.json .
+COPY working/api .
 
 # Step 5: Create mountpoint
 WORKDIR /app/models
 
-# Step 6: Copy files
-WORKDIR /app
-COPY working/gai.json .
-COPY working/api .
-
 # Step 6: Start server
+WORKDIR /app
 CMD ["python", "tts_api.py"]
 
 

@@ -1,3 +1,23 @@
+import os
+
+def app_version():
+    if os.path.exists("./VERSION"):
+        with open("./VERSION") as f:
+            return f.read()
+    return "Not found."
+APP_VERSION=app_version()
+
+def lib_version():
+    import subprocess
+    import re
+    command_output = subprocess.check_output("pip list | grep gai-lib-gen", shell=True).decode()
+    version = re.search(r'(\d+\.\d+)', command_output)
+    if version:
+        return version.group()
+    else:
+        return "Not installed."
+LIB_VERSION=lib_version()
+
 from fastapi import FastAPI, Body
 from pydantic import BaseModel
 from typing import List, Optional
@@ -17,11 +37,13 @@ swagger_url = dependencies.get_swagger_url()
 app=FastAPI(
     title="Gai Generators Service",
     description="""Gai Generators Service""",
-    version="0.0.1",
+    version=APP_VERSION,
     docs_url=swagger_url
     )
 dependencies.configure_cors(app)
 semaphore = dependencies.configure_semaphore()
+logger.info(f"Starting Gai Generators Service v{APP_VERSION}")
+logger.info(f"Version of gai_lib_gen installed = {LIB_VERSION}")
 
 from gai.gen import Gaigen
 generator = Gaigen.GetInstance()

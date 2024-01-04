@@ -111,13 +111,17 @@ class ExLlama_TTT:
         self.client.settings.beam_length = model_params["beam_length"] if "beam_length" in model_params and model_params["beam_length"] is not None else self.client.settings.beam_length
 
     def _generate_simple(self, prompt, max_new_tokens = 128):
+        logger.debug(f"exllama_engine._generate_simple: prompt={prompt}")
+        
+        max_seq_len=8096
+        #max_seq_len = self.gai_config["max_seq_len"]
 
         self.client.end_beam_search()
 
-        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = self.model.gai_config.max_seq_len)
+        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = max_seq_len)
         self.client.gen_begin(ids, mask = mask)
 
-        max_new_tokens = min(max_new_tokens, self.client.model.gai_config.max_seq_len - ids.shape[1])
+        max_new_tokens = min(max_new_tokens, max_seq_len - ids.shape[1])
 
         finish_reason="length"
         eos = torch.zeros((ids.shape[0],), dtype = torch.bool)

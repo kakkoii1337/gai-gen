@@ -3,5 +3,5 @@ curl -X 'POST' \
     -H 'accept: application/json' \
     -H 'Content-Type: multipart/form-data' \
     -s \
-    -F 'file=@../today-is-a-wonderful-day.wav' \
+    -F 'file=@../tell-me-a-one-paragraph-story.wav' \
     -F 'model=whisper-transformers'

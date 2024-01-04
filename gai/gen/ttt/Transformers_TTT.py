@@ -169,7 +169,7 @@ class Transformers_TTT:
             )
         yield self.parse_chunk_output(
             id=id, 
-            output=chunk, 
+            output='', 
             finish_reason="stop"
             )                
 

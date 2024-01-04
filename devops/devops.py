@@ -40,29 +40,57 @@ class Deploy(cmd.Cmd):
         return True
 
     def get_version(self):
-        with open('../setup.py', 'r') as file:
-            first_line = file.readline()
-            _, version = first_line.split('=')
-            version = version.strip().strip("'")  # remove whitespace and quotes
+        with open('../gai/gen/api/VERSION', 'r') as file:
+            version = file.readline()
         return version
+
+    def do_publish(self, svc):
+        if not svc:
+            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            return
+        self._cmd("cd ~/github/kakkoii1337/gai-gen && python setup.py sdist")
+        #self._cmd("""cd ~/github/kakkoii1337/gai-gen && twine upload dist/*""")        
+        self._cmd("""cd ~/github/kakkoii1337/gai-gen && for file in dist/*; do
+                        twine upload "$file" || true
+                    done
+                  """)        
 
     def do_build(self,svc):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt'] ")
             return
-        self.do_publish(svc)
-        version =self.get_version()
-        if (svc != "itt"):
+
+        import threading
+
+        # thread: 1
+        def thread_1():
+            self.do_publish(svc)
+
+        # thread: 2
+        def thread_2():
+            version =self.get_version()
             self._cmd("rm -rf working && mkdir working")
             self._cmd("cp ../gai.json working")
-            self._cmd("cp -rp ../gai/gen/api working")
-            self._cmd(f"docker build -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
-        else:
-            self._cmd("rm -rf working && mkdir working")
-            self._cmd("cp ../gai.json working")
-            self._cmd("cp -rp ../gai/gen/api working")
-            self._cmd("cp -rp ../external/LLaVA working")
-            self._cmd(f"docker build -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
+            self._cmd("cp ../README.md working")
+            self._cmd("cp ../setup.py working")
+            self._cmd("cp ../requirements_*.txt working")
+            self._cmd("cp -rp ../gai working")
+            if (svc == "itt"):
+                self._cmd("cp -rp ../external/LLaVA working")
+            self._cmd(f"DOCKER_BUILDKIT=1 docker build -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
+            self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
+
+        # Create threads
+        t1 = threading.Thread(target=thread_1)
+        t2 = threading.Thread(target=thread_2)
+
+        # Start threads
+        t1.start()
+        t2.start()
+
+        # Wait for both threads to finish
+        t1.join()
+        t2.join()        
 
     def do_start(self,svc):
         if not svc:
@@ -94,23 +122,13 @@ class Deploy(cmd.Cmd):
         version=self.get_version()
         self.do_build(svc)
         self._cmd(f"""docker tag gai-{svc}:{version} kakkoii1337/gai-{svc}:{version}""")        
-        self._cmd(f"""docker tag gai-{svc}:{version} kakkoii1337/gai-{svc}:latest""")        
         self._cmd(f"""docker push kakkoii1337/gai-{svc}:{version}""")
+        self._cmd(f"""docker tag gai-{svc}:latest kakkoii1337/gai-{svc}:latest""")
         self._cmd(f"""docker push kakkoii1337/gai-{svc}:latest""")
 
     def do_ps(self,ignored):
         self._cmd(f"""docker ps -a""")
 
-    def do_publish(self, svc):
-        if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
-            return
-        self._cmd("cd ~/github/kakkoii1337/gai-gen && python setup.py sdist")
-        #self._cmd("""cd ~/github/kakkoii1337/gai-gen && twine upload dist/*""")        
-        self._cmd("""cd ~/github/kakkoii1337/gai-gen && for file in dist/*; do
-                        twine upload "$file" || true
-                    done
-                  """)        
 
 if __name__ == "__main__":
     Deploy().cmdloop()

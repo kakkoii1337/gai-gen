@@ -129,7 +129,7 @@ class LlamaCpp_TTT:
                 )
         yield self.parse_chunk_output(
             id=id, 
-            output=chunk['choices'][0]['text'], 
+            output='', 
             finish_reason="stop"
             )                
 

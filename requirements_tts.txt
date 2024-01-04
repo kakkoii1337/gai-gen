@@ -1,0 +1,10 @@
+torch==2.1.2
+torchaudio==2.1.2
+transformers==4.36.2
+ipykernel==6.27.1
+openai==1.6.1
+python-dotenv==1.0.0
+TTS==0.22.0
+deepspeed==0.12.6
+uvicorn==0.23.2
+fastapi
