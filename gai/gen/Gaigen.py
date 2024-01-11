@@ -63,7 +63,6 @@ class Gaigen:
         except Exception as e:
             logger.error(f"Gaigen: Error loading generator {generator_name}: {e}")
             raise e
-       
 
     def unload(self):
         if self.generator is not None:

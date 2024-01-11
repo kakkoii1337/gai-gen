@@ -6,6 +6,24 @@ from gai.common.logging import getLogger
 logger = getLogger(__name__)
 import asyncio
 
+def app_version():
+    if os.path.exists("./VERSION"):
+        with open("./VERSION") as f:
+            return f.read()
+    return "Not found."
+APP_VERSION=app_version()
+
+def lib_version():
+    import subprocess
+    import re
+    command_output = subprocess.check_output("pip list | grep gai-lib-gen", shell=True).decode()
+    version = re.search(r'(\d+\.\d+)', command_output)
+    if version:
+        return version.group()
+    else:
+        return "Not installed."
+LIB_VERSION=lib_version()
+
 def configure_logging():
     from gai.common.logging import configure_loglevel
     configure_loglevel()

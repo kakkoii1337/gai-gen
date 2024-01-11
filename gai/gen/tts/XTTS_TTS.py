@@ -120,6 +120,8 @@ class XTTS_TTS:
         input = model_params.pop("input",None)
         if input is None:
             raise Exception("Missing input parameter")
+        if input[-1] !="\n":
+            input = input + "\n"
 
         voice = model_params.pop("voice",None)
         if voice is None:

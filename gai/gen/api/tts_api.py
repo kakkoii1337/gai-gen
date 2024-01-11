@@ -12,11 +12,13 @@ import dependencies
 dependencies.configure_logging()
 from gai.common.logging import getLogger
 logger = getLogger(__name__)
+logger.info(f"Starting Gai Generators Service v{dependencies.APP_VERSION}")
+logger.info(f"Version of gai_lib_gen installed = {dependencies.LIB_VERSION}")
 swagger_url = dependencies.get_swagger_url()
 app=FastAPI(
     title="Gai Generators Service",
     description="""Gai Generators Service""",
-    version="0.0.1",
+    version=dependencies.APP_VERSION,
     docs_url=swagger_url
     )
 dependencies.configure_cors(app)
@@ -31,8 +33,8 @@ generator.load("xtts-2")
 class TextToSpeechRequest(BaseModel):
     model: Optional[str] = "xtts-2"
     input: str
-    voice: str = None
-    language: str = None
+    voice: Optional[str] = None
+    language: Optional[str] = None
     stream: Optional[bool] = False
 
 @app.post("/gen/v1/audio/speech")
