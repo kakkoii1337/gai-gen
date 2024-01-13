@@ -166,6 +166,20 @@
                 "temperature": 0.2,
                 "max_new_tokens": 512
             }
+        },
+        "rag": {
+            "type": "rag",
+            "chromadb": {
+                "path": "chromadb",
+                "n_results": 3
+            },
+            "model_path": "models/instructor-large",
+            "device": "cuda",
+            "chunks": {
+                "size": 2000,
+                "overlap": 200,
+                "path": "chunks"
+            }
         }
     }
 }

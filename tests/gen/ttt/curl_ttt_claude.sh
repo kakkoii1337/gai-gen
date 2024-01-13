@@ -3,10 +3,10 @@ curl -X POST \
     -H 'Content-Type: application/json' \
     -s \
     -N \
-    -d "{\"model\":\"llama2-transformers\", \
+    -d "{\"model\":\"claude2-100k\", \
         \"messages\": [ \
             {\"role\": \"user\",\"content\": \"Tell me a story\"}, \
             {\"role\": \"assistant\",\"content\": \"\"} \
         ],\
         \"stream\":true}" \
-        | python print_delta.py
+        | python ../print_delta.py        

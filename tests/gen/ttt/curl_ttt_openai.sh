@@ -10,4 +10,4 @@ curl -X POST \
         ],\
         \"stream\":true \
         }" \
-        | python print_delta.py
+        | python ../print_delta.py

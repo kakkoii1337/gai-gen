@@ -9,4 +9,4 @@ curl -X POST \
             {\"role\": \"assistant\",\"content\": \"\"} \
         ],\
         \"stream\":true}" \
-        | python print_delta.py
+        | python ../print_delta.py

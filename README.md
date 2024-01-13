@@ -9,12 +9,14 @@ The library provides a simplified and unified interface for seamless switching b
 This is intended for Developers who are targetting the use of multi-modal LLMs for both OpenAI API and local machine models.
 
 The core object is called **Gaigen** - generative AI generator. The premise is for the code to run on as commonly available commodity hardware as possible. The main focus is on 7 billion parameters and below open source models. Gaigen is designed as singleton wrapper where only one model is loaded and cached into memory at any one time.
-To avoid dependency conflicts, the wrappers are organised under the `gen` folder according to 4 mutually-exclusive categories:
+
+To avoid dependency conflicts, the wrappers are organised under the `gen` folder according to 5 mutually-exclusive categories:
 
 -   ttt: Text-to-Text
 -   tts: Text-to-Speech
 -   stt: Speech-to-Text
 -   itt: Image-to-Text
+-   rag: Retrieval-Augmented Generation
 
 ## 2. Requirements
 
@@ -35,7 +37,7 @@ TTT
 -   [turboderp](https://github.com/turboderp/exllama) for ExLlama
 -   Meta Team for the [LLaMa2](https://ai.meta.com/llama/) Model
 -   HuggingFace team for the [Transformers](https://huggingface.co/docs/transformers/llm_tutorial) library and open source models
--   [Mistral AI Team for [Mistral7B](https://mistral.ai/news/announcing-mistral-7b/) Model
+-   Mistral AI Team for [Mistral7B](https://mistral.ai/news/announcing-mistral-7b/) Model
 -   Georgi Gerganov for [LLaMaCpp](https://github.com/ggerganov/llama.cpp)
 
 ITT
@@ -49,6 +51,11 @@ TTS
 STT
 
 -   [OpenAI](https://huggingface.co/openai/whisper-large-v3) for Open Sourcing Whisper v3
+
+RAG
+
+-   [chromadb](https://github.com/chroma-core/chroma) for AI-native open-source embedding database
+-   [instructor](https://huggingface.co/hku-nlp/instructor-large) open source embedding model
 
 ---
 
@@ -70,6 +77,9 @@ pip install "gai-lib-gen[STT]"
 # Install library for image-to-text generation (install LLaVA separately)
 pip install "gai-lib-gen[ITT]"
 git clone https://github.com/haotian-liu/LLaVA && cd LLaVA && pip install -e .
+
+# Install library for retrieval-augmented generation
+pip install "gai-lib[RAG]"
 ```
 
 ### Configuration
@@ -108,16 +118,19 @@ home
 
 ### API Key
 
--   All API keys should be stored in a `.env` file in the root directory of the project. For example,
+-   All API keys should be stored in a `.env` file in the root directory of the project.  
+    For example,
 
-    ```.env
-    OPENAI_API_KEY=<--replace-with-your-api-key-->
-    ANTHROPIC_API_KEY=<--replace-with-your-api-key-->
-    ```
+        ```.env
+        OPENAI_API_KEY=<--replace-with-your-api-key-->
+        ANTHROPIC_API_KEY=<--replace-with-your-api-key-->
+        ```
 
 ### Quick Start
 
 **1. Install virtal environment and Gai**
+
+The following example shows how to install the TTT category but the same steps are applicable to the other categories as well.
 
 ```bash
 conda create -n TTT python=3.10.10 -y

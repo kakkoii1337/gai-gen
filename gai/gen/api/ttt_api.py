@@ -30,16 +30,14 @@ semaphore = dependencies.configure_semaphore()
 from gai.gen import Gaigen
 generator = Gaigen.GetInstance()
 # Pre-load default model
-DEFAULT_GENERATOR = os.getenv("DEFAULT_GENERATOR")
-generator.load(DEFAULT_GENERATOR)
-logger.info(f"Preloading {DEFAULT_GENERATOR}")
+generator.load("mistral7b-exllama")
 
 ### ----------------- TTT ----------------- ###
 class MessageRequest(BaseModel):
     role: str
     content: str
 class ChatCompletionRequest(BaseModel):
-    model: Optional[str] = DEFAULT_GENERATOR
+    model: Optional[str] = "mistral7b-exllama"
     messages: List[MessageRequest]
     stream: Optional[bool] = False
     class Config:

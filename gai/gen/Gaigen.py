@@ -51,10 +51,12 @@ class Gaigen:
         elif generator_type == "itt":
             from gai.gen.itt import ITT
             self.generator = ITT(generator_name=generator_name)
+        elif generator_type == "rag":
+            from gai.gen.rag import RAG
+            self.generator = RAG()
         else:
             logger.error(f"Gaigen.load: The generator_type {generator_type} is not supported.")
             raise Exception(f"Gaigen.load: The generator_type {generator_type} is not supported.")
-        
         try:
             logger.info(f"Gaigen: Loading generator {generator_name}...")
             self.generator.load()
@@ -85,3 +87,19 @@ class Gaigen:
         if hasattr(self.generator, 'get_token_ids'):
             return self.generator.get_token_ids(text)
         raise Exception("get_token_ids is not supported by this generator.")
+
+    def index(self, collection_name, text, title, metadata={"source":"unknown"}, chunk_size=None, chunk_overlap=None):
+        if self.generator_name != "rag":
+            logger.error(f"Gaigen.index: The generator {self.generator_name} does not support indexing.")
+            raise Exception(f"Gaigen.index: The generator {self.generator_name} does not support indexing.")
+        with self.semaphore:
+            self.load()
+            return self.generator.index(collection_name, text, title, metadata, chunk_size, chunk_overlap)
+        
+    def retrieve(self, collection_name, query_texts, n_results=None):
+        if self.generator_name != "rag":
+            logger.error(f"Gaigen.retrieve: The generator {self.generator_name} does not support retrieval.")
+            raise Exception(f"Gaigen.retrieve: The generator {self.generator_name} does not support retrieval.")
+        with self.semaphore:
+            self.load()
+            return self.generator.retrieve(collection_name, query_texts, n_results)

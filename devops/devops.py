@@ -26,13 +26,13 @@ class Deploy(cmd.Cmd):
 
     def do_ssh(self,svc):
         if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
         self._ssh(svc)
 
     def do_logs(self,svc):
         if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
         self._cmd(f"docker logs gai-{svc}")
 
@@ -55,46 +55,48 @@ class Deploy(cmd.Cmd):
                     done
                   """)        
 
-    def do_build(self,svc):
+    def do_build_only(self,svc):
         if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
 
-        import threading
+        version =self.get_version()
+        self._cmd("rm -rf working && mkdir working")
+        self._cmd("cp ../gai.json working")
+        self._cmd("cp ../README.md working")
+        self._cmd("cp ../setup.py working")
+        self._cmd("cp ../requirements_*.txt working")
+        self._cmd("cp -rp ../gai working")
+        self._cmd("cp -rp ../external working")
+        if (svc == "itt"):
+            self._cmd("cp -rp ../external/LLaVA working")
+        self._cmd(f"DOCKER_BUILDKIT=1 docker build --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile .")
+        self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
 
+    def do_build(self,svc):
+        if not svc:
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
+            return
+        import threading
         # thread: 1
         def thread_1():
             self.do_publish(svc)
-
         # thread: 2
         def thread_2():
-            version =self.get_version()
-            self._cmd("rm -rf working && mkdir working")
-            self._cmd("cp ../gai.json working")
-            self._cmd("cp ../README.md working")
-            self._cmd("cp ../setup.py working")
-            self._cmd("cp ../requirements_*.txt working")
-            self._cmd("cp -rp ../gai working")
-            if (svc == "itt"):
-                self._cmd("cp -rp ../external/LLaVA working")
-            self._cmd(f"DOCKER_BUILDKIT=1 docker build -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
-            self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
-
+            self.do_build_only(svc)
         # Create threads
         t1 = threading.Thread(target=thread_1)
         t2 = threading.Thread(target=thread_2)
-
         # Start threads
         t1.start()
         t2.start()
-
         # Wait for both threads to finish
         t1.join()
         t2.join()        
 
     def do_start(self,svc):
         if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
         self.do_stop(svc)
         self.do_build(svc)
@@ -104,6 +106,25 @@ class Deploy(cmd.Cmd):
             -e SWAGGER_URL={os.environ["SWAGGER_URL"]} \
             -e OPENAI_API_KEY={os.environ["OPENAI_API_KEY"]} \
             -e ANTHROPIC_API_KEY={os.environ["ANTHROPIC_API_KEY"]} \
+            -e SQLALCHEMY_DATABASE_URI={os.environ["SQLALCHEMY_DATABASE_URI"]} \
+            --gpus all \
+            -v ~/gai/models:/app/models \
+            gai-{svc}:latest
+            """)
+
+    def do_start_only(self,svc):
+        if not svc:
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
+            return
+        self.do_stop(svc)
+        self.do_build_only(svc)
+        self._cmd(f"""docker run -d \
+            --name gai-{svc} \
+            -p 12031:12031 \
+            -e SWAGGER_URL={os.environ["SWAGGER_URL"]} \
+            -e OPENAI_API_KEY={os.environ["OPENAI_API_KEY"]} \
+            -e ANTHROPIC_API_KEY={os.environ["ANTHROPIC_API_KEY"]} \
+            -e SQLALCHEMY_DATABASE_URI={os.environ["SQLALCHEMY_DATABASE_URI"]} \
             --gpus all \
             -v ~/gai/models:/app/models \
             gai-{svc}:latest
@@ -111,13 +132,13 @@ class Deploy(cmd.Cmd):
 
     def do_stop(self,svc):
         if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
         self._cmd(f"""docker rm -f gai-{svc}""")
 
     def do_push(self,svc):
         if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
         version=self.get_version()
         self.do_build(svc)

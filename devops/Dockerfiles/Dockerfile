@@ -1,0 +1,50 @@
+FROM kakkoii1337/cu118-cp310-base:latest AS base
+
+ARG CATEGORY=ttt
+
+# Step 1: Install utils
+RUN apt update -y && apt install -y git git-lfs ffmpeg python3-dev && \
+    apt clean && rm -rf /var/lib/apt/lists/*
+
+# Step 2: Create env variables
+ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64:/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+ENV MODEL_PATH="/app/models"
+RUN echo '{"app_dir":"/app"}' > /root/.gairc
+
+# Step 3: Create mountpoint for models
+WORKDIR /app/models
+
+# Step 4: Install deps
+WORKDIR /app
+COPY "working/requirements_${CATEGORY}.txt" .
+# This will take 5 minutes to uninstall triton 2.0.0 and torch 2.0.1
+RUN pip install pip==23.3.1
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements_${CATEGORY}.txt
+
+# Step 5: Install extra
+COPY ./Dockerfiles/conditional_copy_and_install.sh /root
+RUN chmod +x /root/conditional_copy_and_install.sh
+RUN /root/conditional_copy_and_install.sh
+
+# Step 6: Install apps
+WORKDIR /app
+COPY ./working/requirements_*.txt .
+COPY ./working/README.md ./working/setup.py ./working/gai.json ./
+COPY ./working/gai ./gai
+RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
+
+# Step 7: Cleanup
+RUN apt remove -y python3-dev && \
+    apt autoremove -y && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip cache purge
+
+# Step 8: Start server
+ENV CATEGORY=${CATEGORY}
+WORKDIR /app/gai/gen/api
+ENTRYPOINT ["sh", "-c"]
+CMD ["python ${CATEGORY}_api.py"]
+
+#CMD ["bash","-c","while true; do sleep 30; done;"]
+
