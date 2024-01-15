@@ -29,6 +29,9 @@ class RAG:
             config = get_config()["gen"]["rag"]
             app_path = get_config_path()
             self.model_path =  os.path.join(app_path, config["model_path"])
+            if (os.environ.get("RAG_MODEL_PATH")):
+                model_path = os.environ["RAG_MODEL_PATH"]
+                self.model_path = os.path.join(app_path, model_path)
             self.chromadb_path = os.path.join(app_path, config["chromadb"]["path"])
             self.n_results = config["chromadb"]["n_results"]
             self.chunks_path = os.path.join(app_path, config["chunks"]["path"])
