@@ -31,8 +31,6 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
 # Step 6: Install extra
 COPY ./working/external/LLaVA .
 RUN pip install --no-cache-dir -e .
-COPY ./working/wheels/*.whl .
-RUN pip install *.whl
 
 # Step 7: Cleanup
 RUN apt remove -y python3-dev && \

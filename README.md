@@ -1,12 +1,28 @@
 # Gai/Gen: Universal LLM Wrapper
 
+Universal Multi-Modal Wrapper Library for LLM inferencing. The library provides a simplified and unified interface for seamless switching between multi-modal open source language models on a local machine and OpenAI APIs. This is intended for Developers who are targetting the use of multi-modal LLMs for both OpenAI API and local machine models.
+
+## Table of Contents
+
+-   [Gai/Gen: Universal LLM Wrapper](#gaigen-universal-llm-wrapper)
+    -   [1. Introduction](#1-introduction)
+    -   [2. Requirements](#2-requirements)
+    -   [3. Credits](#3-credits)
+    -   [4. Using Gai as a Library](#4-using-gai-as-a-library)
+        -   [Configuration](#configuration)
+        -   [API Key](#api-key)
+        -   [Quick Start](#quick-start)
+        -   [Examples](#examples)
+    -   [5. Using Gai as a Service](#5-using-gai-as-a-service)
+        -   [Endpoints](#endpoints)
+        -   [Examples](#examples-1)
+            -   [Text-to-Text Generation](/docs/TTT.ipynb)
+            -   [Speech-to-Text Generation](/docs/STT.ipynb)
+            -   [Text-to-Speech Generation](/docs/TTS.ipynb)
+            -   [Image-to-Text Generation](/docs/ITT.ipynb)
+            -   [Retrieval Augmented Generation](/docs/RAG.ipynb)
+
 ## 1. Introduction
-
-This is a Universal Multi-Modal Wrapper Library for LLM inferencing.
-
-The library provides a simplified and unified interface for seamless switching between multi-modal open source language models on a local machine and OpenAI APIs.
-
-This is intended for Developers who are targetting the use of multi-modal LLMs for both OpenAI API and local machine models.
 
 The core object is called **Gaigen** - generative AI generator. The premise is for the code to run on as commonly available commodity hardware as possible. The main focus is on 7 billion parameters and below open source models. Gaigen is designed as singleton wrapper where only one model is loaded and cached into memory at any one time.
 
@@ -21,11 +37,14 @@ To avoid dependency conflicts, the wrappers are organised under the `gen` folder
 ## 2. Requirements
 
 -   The instructions are tested mainly on:
-    -   Windows 11 with WSL
+
+    -   Windows 11 (22H2 Build 22621.3007) with WSL2 (5.12.133.1-microsoft-standard-WSL2)
     -   Ubuntu 20.04.2 LTS
-    -   NVIDIA RTX 2060 GPU with 8GB VRAM
-    -   CUDA Toolkit is required for the GPU accelerated models. Run `nvidia-smi` to check if CUDA is installed.
-        If you need help, refer to this https://gist.github.com/kakkoii1337/8a8d4d0bc71fa9c099a683d1601f219e
+    -   NVIDIA RTX 2060 GPU with 8GB VRAM. Run `nvidia-smi` to check if CUDA driver is installed.
+
+    ![nvidia-smi](./docs/imgs/nvidia-smi.png)
+
+    -   CUDA Toolkit 11.8 is required for the GPU accelerated models. Run `nvcc --version` to check if CUDA Toolkit is installed. Refer here https://gist.github.com/kakkoii1337/8a8d4d0bc71fa9c099a683d1601f219e if you need guidance.
 
 ## 3. Credits
 
@@ -57,9 +76,17 @@ RAG
 -   [chromadb](https://github.com/chroma-core/chroma) for AI-native open-source embedding database
 -   [instructor](https://huggingface.co/hku-nlp/instructor-large) open source embedding model
 
+## 4. Disclaimer
+
+Maintainers of this repo are not responsible for the actions of third parties who use the models. Please consult an attorney before using models for commercial purposes.
+
+## 5. License
+
+This project is licensed under the [MIT](./LICENSE) License - see the LICENSE file for details.
+
 ---
 
-## 4. Using Gai as a Library
+## 6. Using Gai as a Library
 
 Using Gai as a library requires you to install the right category of package but gives you more control over your interaction with Gaigen.
 It is highly recommended that you install each category in separate virtual environments.
@@ -116,15 +143,48 @@ home
 └── .gairc
 ```
 
+### Downloading Models
+
+When downloading from huggingface model hub, it is recommended to use the [huggingface CLI](https://huggingface.co/docs/huggingface_hub/guides/download#download-from-the-cli).
+You will need to install the CLI first.
+
+```sh
+pip install huggingface-hub
+```
+
+To download a model, run the following command:
+
+```sh
+huggingface-cli download <repo-name>/<model-name> --local-dir ~/gai/models/<model-name> --local-dir-use-symlinks False
+```
+
+Example: Downloading the main branch
+
+```sh
+huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GPTQ \
+                --local-dir ~/gai/models/Mistral-7B-Instruct-v0.1-GPTQ \
+                --local-dir-use-symlinks False
+```
+
+Example: Downloading 2 files
+
+```sh
+huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GGUF \
+                mistral-7b-instruct-v0.1.Q4_K_M.gguf  \
+                config.json \
+                --local-dir ~/gai/models/Mistral-7B-Instruct-v0.1-GGUF \
+                --local-dir-use-symlinks False
+```
+
 ### API Key
 
 -   All API keys should be stored in a `.env` file in the root directory of the project.  
     For example,
 
-        ```.env
-        OPENAI_API_KEY=<--replace-with-your-api-key-->
-        ANTHROPIC_API_KEY=<--replace-with-your-api-key-->
-        ```
+    ```.env
+    OPENAI_API_KEY=<--replace-with-your-api-key-->
+    ANTHROPIC_API_KEY=<--replace-with-your-api-key-->
+    ```
 
 ### Quick Start
 
@@ -146,7 +206,7 @@ Save your OpenAI API key in the **.env** file in the root directory of your proj
 OPENAI_API_KEY=<--replace-with-your-api-key-->
 ```
 
-**2. Run GPT4.**
+**2. Run Inferencing on GPT4.**
 
 Run Text-to-Text generation using OpenAI by loading `gpt-4` wrapper.
 
@@ -160,13 +220,15 @@ print(response)
 
 **3. Install Mistral7B.**
 
-Open `~/gai/gai.json` and refer to `model_path`:
+Download the model `Mistral-7B-Instruct-v0.1-GPTQ` into the `~/gai/models` folder.
 
--   under `mistral7b-exllama`, refer to `model-path` for the repo name.
--   Go to huggingface
--   Download the repo `Mistral-7B-Instruct-v0.1-GPTQ` into the `~/gai/models` folder.
+```json
+huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GPTQ \
+                --local-dir ~/gai/models/Mistral-7B-Instruct-v0.1-GPTQ \
+                --local-dir-use-symlinks False
+```
 
-**4. Run Mistral7B.**
+**4. Run Inferencing on Mistral**
 
 Run Text-to-Text generation using Mistral7B by replacing `gpt-4` with `mistral7b-exllama`.
 
@@ -178,14 +240,7 @@ response = gen.create(messages=[{'role':'USER','content':'Tell me a one paragrap
 print(response)
 ```
 
-### Examples
-
--   [Text-to-Text Generation (OpenAI GPT4 vs Open-Source Mistra7B)](/docs/TTT.ipynb)
--   [Speech-to-Text Generation (OpenAI Whisper vs Open-Source Whisper)](/docs/STT.ipynb)
--   [Text-to-Speech Generation (OpenAI Speech vs Open-Source xTTS)](/docs/TTS.ipynb)
--   [Image-to-Text Generation (OpenAI Vision vs Open-Source Llava)](/docs/ITT.ipynb)
-
-## 5. Using Gai as a Service
+## 7. Using Gai as a Service
 
 The simplest way to use Gai is to run it as a service using Docker.
 You will still need to download the models into ~/gai/models but map the volume to the container.
@@ -202,8 +257,8 @@ Body:
 
 ```json
 {
-    "model": "More specifically, this is the name of the generator, eg. "mistral7b-exllama" or "gpt-4" etc, refer to the gai.json keys as a reference,
-    "messages": Follows openai styled message list, [{"role":user|system|ai, "content":message}],
+    "model": More specifically, this is the name of the generator, eg. 'mistral7b-exllama' or 'gpt-4' etc, refer to the gai.json keys as a reference,
+    "messages": Follows openai styled message list, [{"role":"user"|"system"|"ai", "content":message}],
     "stream": true|false,
     hyperparameters(eg. these will correspond to the parameters based on the model parameter specified above)
 }
@@ -216,7 +271,7 @@ Body:
 
 ```json
 {
-    "model": "More specifically, this is the name of the generator, eg. "xtts-2" or "openai-tts" etc, refer to the gai.json keys as a reference,
+    "model": More specifically, this is the name of the generator, eg. 'xtts-2' or 'openai-tts' etc, refer to the gai.json keys as a reference,
     "input": text to be spoken,
     "voice": speaker name (this will correspond to the list provided by the model parameter specified above),
     "language": language code (this will correspond to the list provided by the model parameter specified above),
@@ -238,7 +293,7 @@ Method: POST
 
 ```json
 Body: {
-    "model": "More specifically, this is the name of the generator, eg. "llava-transformers" or "openai-vision" etc, refer to the gai.json keys as a reference,
+    "model": More specifically, this is the name of the generator, eg. 'llava-transformers' or 'openai-vision' etc, refer to the gai.json keys as a reference,
     "messages": Follows openai styled message list, [
         {
             "role": "user",
@@ -261,9 +316,10 @@ Body: {
 
 You can start the container for the corresponding LLM category and start using via REST API calls.
 
-### Examples
+## 8. Examples
 
--   [Text-to-Text Generation](/docs/TTT.ipynb)
--   [Speech-to-Text Generation](/docs/STT.ipynb)
--   [Text-to-Speech Generation](/docs/TTS.ipynb)
--   [Image-to-Text Generation](/docs/ITT.ipynb)
+-   [Text-to-Text Generation (OpenAI GPT4 vs Open-Source Mistra7B)](/docs/TTT.ipynb)
+-   [Speech-to-Text Generation (OpenAI Whisper vs Open-Source Whisper)](/docs/STT.ipynb)
+-   [Text-to-Speech Generation (OpenAI Speech vs Open-Source xTTS)](/docs/TTS.ipynb)
+-   [Image-to-Text Generation (OpenAI Vision vs Open-Source Llava)](/docs/ITT.ipynb)
+-   [Retrieval Augmented Generation](/docs/RAG.ipynb)
