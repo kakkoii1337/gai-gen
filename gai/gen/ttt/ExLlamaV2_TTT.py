@@ -2,9 +2,9 @@ import torch, gc, re,os
 from gai.common import logging, generators_utils
 logger = logging.getLogger(__name__)
 from gai.common.utils import get_config_path
-from exllamav2.model import ExLlama, ExLlamaCache, ExLlamaConfig
-from exllamav2.tokenizer import ExLlamaTokenizer
-from exllamav2.generator import ExLlamaGenerator as ExLlamaGen
+from exllama.model import ExLlama, ExLlamaCache, ExLlamaConfig
+from exllama.tokenizer import ExLlamaTokenizer
+from exllama.generator import ExLlamaGenerator as ExLlamaGen
 from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage, Choice , CompletionUsage
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk, Choice as ChunkChoice, ChoiceDelta
 from uuid import uuid4
@@ -28,25 +28,16 @@ class ExLlamaV2_TTT:
         "stream"
         ]
 
-    def get_model_params(self, **kwargs):
-        params={
-            "max_new_tokens":25,
-            "temperature":0.7,
-            "top_p": 1,
-            "top_k": 3
-        }        
-        return {**params,**kwargs}
-
-    def __init__(self,model_config):
-        if (model_config is None):
-            raise Exception("exllama_engine: model_config is required")
-        if "model_path" not in model_config or model_config["model_path"] is None:
+    def __init__(self,gai_config):
+        if (gai_config is None):
+            raise Exception("exllama_engine: gai_config is required")
+        if "model_path" not in gai_config or gai_config["model_path"] is None:
             raise Exception("exllama_engine: model_path is required")
-        if "model_basename" not in model_config or model_config["model_basename"] is None:
+        if "model_basename" not in gai_config or gai_config["model_basename"] is None:
             raise Exception("exllama_engine: model_basename is required")
 
-        self.config = model_config
-        self.model_filepath = os.path.join(get_config_path(), model_config["model_path"], model_config["model_basename"])+".safetensors"
+        self.gai_config = gai_config
+        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])+".safetensors"
         self.model = None
         self.tokenizer = None
         self.client = None
@@ -56,15 +47,15 @@ class ExLlamaV2_TTT:
         logger.info(f"exllama_engine.load: Loading model from {self.model_filepath}")
 
         # model
-        model_config_path = os.path.join(get_config_path(),self.config["model_path"], 'config.json')
+        model_config_path = os.path.join(get_config_path(),self.gai_config["model_path"], 'config.json')
 
         exllama_config = ExLlamaConfig(model_config_path)        
-        exllama_config.max_seq_len = self.config["max_seq_len"]
+        exllama_config.max_seq_len = self.gai_config["max_seq_len"]
         exllama_config.model_path = self.model_filepath
         self.model = ExLlama(exllama_config)
 
         # tokenizer
-        tokenizer_path= os.path.join(get_config_path(),self.config["model_path"], 'tokenizer.model')
+        tokenizer_path= os.path.join(get_config_path(),self.gai_config["model_path"], 'tokenizer.model')
         self.tokenizer = ExLlamaTokenizer(tokenizer_path)         
 
         # generator
@@ -95,7 +86,7 @@ class ExLlamaV2_TTT:
 
     def get_response(self,output,ai_role="ASSISTANT"):
         return re.split(rf'{ai_role}:', output, flags=re.IGNORECASE)[-1].strip().replace('\n\n', '\n').replace('</s>', '')
-    
+
     def _init_settings(self,model_params):
         self.client.settings.temperature = model_params["temperature"] if "temperature" in model_params and model_params["temperature"] is not None else self.client.settings.temperature
         self.client.settings.top_p = model_params["top_p"] if "top_p" in model_params and model_params["top_p"] is not None else self.client.settings.top_p
@@ -111,13 +102,20 @@ class ExLlamaV2_TTT:
         self.client.settings.beam_length = model_params["beam_length"] if "beam_length" in model_params and model_params["beam_length"] is not None else self.client.settings.beam_length
 
     def _generate_simple(self, prompt, max_new_tokens = 128):
-
+        logger.debug(f"exllama_engine._generate_simple: prompt={prompt}")
+        
+        max_seq_len = self.gai_config["max_seq_len"]
         self.client.end_beam_search()
+        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = max_seq_len)
 
-        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = self.model.config.max_seq_len)
-        self.client.gen_begin(ids, mask = mask)
+        try:
+            self.client.gen_begin(ids, mask = mask)
+        except RuntimeError as e:
+            if ((str(e).find("exceeds dimension size") != -1)):
+                raise Exception("context_length_exceeded")
+            raise e
 
-        max_new_tokens = min(max_new_tokens, self.client.model.config.max_seq_len - ids.shape[1])
+        max_new_tokens = min(max_new_tokens, max_seq_len - ids.shape[1])
 
         finish_reason="length"
         eos = torch.zeros((ids.shape[0],), dtype = torch.bool)
@@ -144,7 +142,7 @@ class ExLlamaV2_TTT:
             model_params["temperature"]=10e-10
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         logger.debug(f"exllama_engine.generate: model_params={model_params}")
         
         input_count=self.token_count(prompt)
@@ -201,12 +199,21 @@ class ExLlamaV2_TTT:
                     ))
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
             usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
             )
         return response    
+
+    def _should_stop(self,new_text):
+        stop_words=self.gai_config.get("stopping_words")
+        #stop_words=["\nuser:","\nassistant:","[/INST]"]
+        for stop_word in stop_words:
+            if new_text.endswith(stop_word):
+                logger.debug(f"exllama_engine.streaming: stopped by : '{stop_word}'")        
+                return True
+        return False
 
     def _streaming(self,prompt,**model_params):
 
@@ -216,7 +223,8 @@ class ExLlamaV2_TTT:
 
         logger.debug(f"exllama_engine.streaming: prompt={prompt}")
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
+
         logger.debug(f"model_params: {model_params}")
 
         input_count=self.token_count(prompt)
@@ -244,6 +252,10 @@ class ExLlamaV2_TTT:
                 yield self.parse_chunk_output(id,new_token, "stop")
                 return
 
+            if self._should_stop(new_text):
+                yield self.parse_chunk_output(id,new_token, "stop")
+                return            
+
             #if break_on_newline and 
             # could add `break_on_newline` as a GenerateRequest option?
             #if token.item() == tokenizer.newline_token_id:
@@ -254,12 +266,14 @@ class ExLlamaV2_TTT:
             if i == max_new_tokens - 1:
                 logger.debug(f"exllama_engine.streaming: stopped by max_new_tokens: {max_new_tokens}")
                 yield self.parse_chunk_output(id,new_token, "length")
+                self.client.end_beam_search() 
                 return
 
             yield self.parse_chunk_output(id,new_token)
 
         # all done:
         self.client.end_beam_search() 
+        return
 
     # Sample:
     #ChatCompletionChunk(
@@ -300,7 +314,7 @@ class ExLlamaV2_TTT:
                     )
             ],
             created=created,
-            model=self.config["model_name"],
+            model=self.gai_config["model_name"],
             object="chat.completion.chunk",
             system_fingerprint=None,
             usage=None
@@ -308,14 +322,20 @@ class ExLlamaV2_TTT:
         return response
 
     def _apply_template(self, prompt:List):
-        content = generators_utils.chat_list_to_string(prompt)
-        prompt_template = "<s>[INST] {prompt} [/INST]"
-        prompt = prompt_template.format(prompt=content)
+        prompt = generators_utils.chat_list_to_string(prompt)
+        #prompt_template= "<s>[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n{user_message} [/INST]"
+        #prompt_template = "<s>[INST] {prompt} [/INST]"
+        #prompt = prompt_template.format(prompt=content)
+
+        prompt_template = self.gai_config.get("prompt_template")
+        if prompt_template:
+            prompt = prompt_template.format(user_message=prompt)
+
         return prompt
 
     def _remove_template(self, output:str):
-        prompt_template = r'<s>\[INST\].*?\[/INST\]\s*'
-        return re.sub(prompt_template, '', output, flags=re.S)
+        prompt_template_mask = r'<s>\[INST\].*?\[/INST\]\s*'
+        return re.sub(prompt_template_mask, '', output, flags=re.S)
 
     def create(self,messages,**model_params):
         self.prompt=self._apply_template(messages)
@@ -323,7 +343,7 @@ class ExLlamaV2_TTT:
             self.load()
 
         model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = self.get_model_params(**model_params)
+        model_params = {**self.gai_config["hyperparameters"],**model_params}
         stream = model_params.pop("stream", False)
 
         if not stream:

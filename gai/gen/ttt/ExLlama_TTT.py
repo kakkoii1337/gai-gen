@@ -28,15 +28,6 @@ class ExLlama_TTT:
         "stream"
         ]
 
-    # def get_model_params(self, **kwargs):
-    #     params={
-    #         "max_new_tokens":25,
-    #         "temperature":0.7,
-    #         "top_p": 1,
-    #         "top_k": 3
-    #     }        
-    #     return {**params,**kwargs}
-
     def __init__(self,gai_config):
         if (gai_config is None):
             raise Exception("exllama_engine: gai_config is required")
@@ -95,7 +86,7 @@ class ExLlama_TTT:
 
     def get_response(self,output,ai_role="ASSISTANT"):
         return re.split(rf'{ai_role}:', output, flags=re.IGNORECASE)[-1].strip().replace('\n\n', '\n').replace('</s>', '')
-    
+
     def _init_settings(self,model_params):
         self.client.settings.temperature = model_params["temperature"] if "temperature" in model_params and model_params["temperature"] is not None else self.client.settings.temperature
         self.client.settings.top_p = model_params["top_p"] if "top_p" in model_params and model_params["top_p"] is not None else self.client.settings.top_p
@@ -113,13 +104,16 @@ class ExLlama_TTT:
     def _generate_simple(self, prompt, max_new_tokens = 128):
         logger.debug(f"exllama_engine._generate_simple: prompt={prompt}")
         
-        max_seq_len=8096
-        #max_seq_len = self.gai_config["max_seq_len"]
-
+        max_seq_len = self.gai_config["max_seq_len"]
         self.client.end_beam_search()
-
         ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = max_seq_len)
-        self.client.gen_begin(ids, mask = mask)
+
+        try:
+            self.client.gen_begin(ids, mask = mask)
+        except RuntimeError as e:
+            if ((str(e).find("exceeds dimension size") != -1)):
+                raise Exception("context_length_exceeded")
+            raise e
 
         max_new_tokens = min(max_new_tokens, max_seq_len - ids.shape[1])
 
@@ -212,6 +206,15 @@ class ExLlama_TTT:
             )
         return response    
 
+    def _should_stop(self,new_text):
+        stop_words=self.gai_config.get("stopping_words")
+        #stop_words=["\nuser:","\nassistant:","[/INST]"]
+        for stop_word in stop_words:
+            if new_text.endswith(stop_word):
+                logger.debug(f"exllama_engine.streaming: stopped by : '{stop_word}'")        
+                return True
+        return False
+
     def _streaming(self,prompt,**model_params):
 
         new_text = ""
@@ -248,6 +251,10 @@ class ExLlama_TTT:
                 logger.debug(f"exllama_engine.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
                 yield self.parse_chunk_output(id,new_token, "stop")
                 return
+
+            if self._should_stop(new_text):
+                yield self.parse_chunk_output(id,new_token, "stop")
+                return            
 
             #if break_on_newline and 
             # could add `break_on_newline` as a GenerateRequest option?
@@ -315,14 +322,20 @@ class ExLlama_TTT:
         return response
 
     def _apply_template(self, prompt:List):
-        content = generators_utils.chat_list_to_string(prompt)
-        prompt_template = "<s>[INST] {prompt} [/INST]"
-        prompt = prompt_template.format(prompt=content)
+        prompt = generators_utils.chat_list_to_string(prompt)
+        #prompt_template= "<s>[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n{user_message} [/INST]"
+        #prompt_template = "<s>[INST] {prompt} [/INST]"
+        #prompt = prompt_template.format(prompt=content)
+
+        prompt_template = self.gai_config.get("prompt_template")
+        if prompt_template:
+            prompt = prompt_template.format(user_message=prompt)
+
         return prompt
 
     def _remove_template(self, output:str):
-        prompt_template = r'<s>\[INST\].*?\[/INST\]\s*'
-        return re.sub(prompt_template, '', output, flags=re.S)
+        prompt_template_mask = r'<s>\[INST\].*?\[/INST\]\s*'
+        return re.sub(prompt_template_mask, '', output, flags=re.S)
 
     def create(self,messages,**model_params):
         self.prompt=self._apply_template(messages)

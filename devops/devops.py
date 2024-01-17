@@ -73,6 +73,24 @@ class Deploy(cmd.Cmd):
         self._cmd(f"DOCKER_BUILDKIT=1 docker build --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile .")
         self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
 
+    def do_build_nocache(self,svc):
+        if not svc:
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
+            return
+
+        version =self.get_version()
+        self._cmd("rm -rf working && mkdir working")
+        self._cmd("cp ../gai.json working")
+        self._cmd("cp ../README.md working")
+        self._cmd("cp ../setup.py working")
+        self._cmd("cp ../requirements_*.txt working")
+        self._cmd("cp -rp ../gai working")
+        self._cmd("cp -rp ../external working")
+        if (svc == "itt"):
+            self._cmd("cp -rp ../external/LLaVA working")
+        self._cmd(f"docker build --no-cache --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile .")
+        self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
+
     def do_build(self,svc):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
@@ -128,6 +146,26 @@ class Deploy(cmd.Cmd):
             --gpus all \
             -v ~/gai/models:/app/models \
             gai-{svc}:latest
+            """)
+
+    def do_start_idle(self,svc):
+        if not svc:
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
+            return
+        self.do_stop(svc)
+        self.do_build_only(svc)
+        self._cmd(f"""docker run \
+            -d \
+            --name gai-{svc} \
+            -p 12031:12031 \
+            -e SWAGGER_URL={os.environ["SWAGGER_URL"]} \
+            -e OPENAI_API_KEY={os.environ["OPENAI_API_KEY"]} \
+            -e ANTHROPIC_API_KEY={os.environ["ANTHROPIC_API_KEY"]} \
+            -e SQLALCHEMY_DATABASE_URI={os.environ["SQLALCHEMY_DATABASE_URI"]} \
+            --gpus all \
+            -v ~/gai/models:/app/models \
+            gai-{svc}:latest \
+            /bin/bash -c "tail -f /dev/null"
             """)
 
     def do_stop(self,svc):

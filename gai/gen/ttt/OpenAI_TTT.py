@@ -54,9 +54,9 @@ class OpenAI_TTT:
         return self
 
     def apply_template(self,prompt: List):
-        content = generators_utils.chat_list_to_string(prompt)
+        prompt = generators_utils.chat_list_to_string(prompt)
         prompt = [
-            {"role":"user","content":content},
+            {"role":"user","content":prompt},
             {"role":"assistant","content":""}
             ]
         return prompt

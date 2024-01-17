@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.responses import StreamingResponse,JSONResponse
@@ -45,33 +45,35 @@ class ChatCompletionRequest(BaseModel):
     
 @app.post("/gen/v1/chat/completions")
 async def _text_to_text(request: ChatCompletionRequest = Body(...)):
+    response=None
     try:
         model = request.model
         messages = request.messages
         model_params = request.model_dump(exclude={"model", "messages","stream"})  
         stream = request.stream
         gen = Gaigen.GetInstance().load(model)
-        if stream:
-            return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in gen.create(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                stream=True,
-                **model_params
-            ))
-        else:
-            return gen.create(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                stream=False,
-                **model_params
-            )
-
-    except Exception as e:
-        logger.error(f"_create: error={e}")
-        return JSONResponse(
-            content={"_create: error=": str(e)},
-            status_code=500
+        response = gen.create(
+            model=model,
+            messages=[message.model_dump() for message in messages],
+            stream=stream,
+            **model_params
         )
+        if stream:
+            return StreamingResponse(json.dumps(jsonable_encoder(chunk))+"\n" for chunk in response)
+        else:
+            return response
+    except Exception as e:
+        if (str(e)=='context_length_exceeded'):
+            return JSONResponse(status_code=400,content={
+                "type":"error",
+                "code":"context_length_exceeded",
+                "message":"The message has exceeded the model's context length."
+            })
+        return JSONResponse(status_code=500,content={
+            "type":"error",
+            "code":"internal_error",
+            "message":str(e)
+        })
 
 if __name__ == "__main__":
     import uvicorn

@@ -45,9 +45,12 @@ class Claude2_TTT:
         return output
 
     def _apply_template(self,prompt: List):
-        content = generators_utils.chat_list_to_string(prompt)
-        prompt_template = "\n\nHuman: {content}\n\nAssistant:"
-        prompt = prompt_template.format(content=content)
+        prompt = generators_utils.chat_list_to_string(prompt)
+
+        prompt_template = self.gai_config.get("prompt_template")
+        if prompt_template:
+            prompt = prompt_template.format(user_message=prompt)
+            
         return prompt
     
     def _generating(self,prompt,**model_params):
