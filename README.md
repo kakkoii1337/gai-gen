@@ -109,9 +109,9 @@ git clone https://github.com/haotian-liu/LLaVA && cd LLaVA && pip install -e .
 pip install "gai-lib[RAG]"
 ```
 
-### Configuration
+### 6.1 Configuration
 
-Step 1. Create a `.gairc` file in your home directory. This file contains the default configurations for Gai.
+**Step 1.** Create a `.gairc` file in your home directory. This file contains the default configurations for Gai.
 
 ```bash
 {
@@ -119,7 +119,7 @@ Step 1. Create a `.gairc` file in your home directory. This file contains the de
 }
 ```
 
-Step 2. Create a `/gai` directory.
+**Step 2.** Create a `/gai` directory.
 
 ```bash
 mkdir ~/gai
@@ -127,7 +127,7 @@ mkdir ~/gai
 
 Copy `gai.json` from this repository into `~/gai`. This file contains the configurations for models and their respective loaders.
 
-Step 3. Create `/gai/models` directory.
+**Step 3.** Create `/gai/models` directory.
 
 ```bash
 mkdir ~/gai/models
@@ -143,7 +143,7 @@ home
 └── .gairc
 ```
 
-### Downloading Models
+### 6.2 Downloading Models
 
 When downloading from huggingface model hub, it is recommended to use the [huggingface CLI](https://huggingface.co/docs/huggingface_hub/guides/download#download-from-the-cli).
 You will need to install the CLI first.
@@ -158,7 +158,7 @@ To download a model, run the following command:
 huggingface-cli download <repo-name>/<model-name> --local-dir ~/gai/models/<model-name> --local-dir-use-symlinks False
 ```
 
-Example: Downloading the main branch
+**Example:** Downloading the main branch
 
 ```sh
 huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GPTQ \
@@ -166,7 +166,7 @@ huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GPTQ \
                 --local-dir-use-symlinks False
 ```
 
-Example: Downloading 2 files
+**Example:** Downloading 2 files
 
 ```sh
 huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GGUF \
@@ -176,7 +176,7 @@ huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GGUF \
                 --local-dir-use-symlinks False
 ```
 
-### API Key
+### 6.3 API Key
 
 -   All API keys should be stored in a `.env` file in the root directory of the project.  
     For example,
@@ -186,9 +186,9 @@ huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GGUF \
     ANTHROPIC_API_KEY=<--replace-with-your-api-key-->
     ```
 
-### Quick Start
+### 6.4 Quick Start
 
-**1. Install virtal environment and Gai**
+**Step 1. Install virtal environment and Gai**
 
 The following example shows how to install the TTT category but the same steps are applicable to the other categories as well.
 
@@ -198,7 +198,7 @@ conda activate TTT
 pip install gai-lib-gen[TTT]
 ```
 
-**1. Setup OpenAI API Key.**
+**Step 2. Setup OpenAI API Key.**
 
 Save your OpenAI API key in the **.env** file in the root directory of your project.
 
@@ -206,7 +206,7 @@ Save your OpenAI API key in the **.env** file in the root directory of your proj
 OPENAI_API_KEY=<--replace-with-your-api-key-->
 ```
 
-**2. Run Inferencing on GPT4.**
+**Step 3. Run Inferencing on GPT4.**
 
 Run Text-to-Text generation using OpenAI by loading `gpt-4` wrapper.
 
@@ -218,7 +218,7 @@ response = gen.create(messages=[{'role':'USER','content':'Tell me a one paragrap
 print(response)
 ```
 
-**3. Install Mistral7B.**
+**Step 4. Install Mistral7B.**
 
 Download the model `Mistral-7B-Instruct-v0.1-GPTQ` into the `~/gai/models` folder.
 
@@ -228,7 +228,7 @@ huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.1-GPTQ \
                 --local-dir-use-symlinks False
 ```
 
-**4. Run Inferencing on Mistral**
+**Step 5. Run Inferencing on Mistral**
 
 Run Text-to-Text generation using Mistral7B by replacing `gpt-4` with `mistral7b-exllama`.
 
@@ -242,79 +242,121 @@ print(response)
 
 ## 7. Using Gai as a Service
 
-The simplest way to use Gai is to run it as a service using Docker.
-You will still need to download the models into ~/gai/models but map the volume to the container.
-You can then start up a container and post REST API calls to a single endpoint:
+Gai Service is meant to be a one-model-per-instance service. Unlike library, you cannot change the model during runtime.
+
+The easiest to run Gai Service is to use a Docker container. You will need to download the models into ~/gai/models and map the volume to the container. You can then start up a container and post REST API calls to following endpoints.
 
 ### Endpoints
 
-The endpoints corresponding to each categories are:
+The following endpoints are only available for the category of models that you have installed.
 
 **- Text-to-Text (TTT)**  
 Endpoint: http://localhost:12031/gen/v1/chat/completions  
 Method: POST  
-Body:
+Type: Body
+
+| Name     | Type | Description                    | Default           |
+| -------- | ---- | ------------------------------ | ----------------- |
+| model    | str  | generator name                 | mistral7b-exllama |
+| messages | list | See below                      |                   |
+| stream   | bool | True, False                    | True              |
+| ...      |      | Hyperparameters based on model |                   |
+
+Note:
+
+-   messages
 
 ```json
-{
-    "model": More specifically, this is the name of the generator, eg. 'mistral7b-exllama' or 'gpt-4' etc, refer to the gai.json keys as a reference,
-    "messages": Follows openai styled message list, [{"role":"user"|"system"|"ai", "content":message}],
-    "stream": true|false,
-    hyperparameters(eg. these will correspond to the parameters based on the model parameter specified above)
-}
+[
+    { "role": "system", "content": system message },
+    { "role": "user", "content": user message },
+    { "role": "assistant", "content": AI message },
+    ...
+]
 ```
 
 **- Text-to-Speech (TTS)**  
 Endpoint: http://localhost:12031/gen/v1/audio/speech  
 Method: POST  
-Body:
+Type: Body
 
-```json
-{
-    "model": More specifically, this is the name of the generator, eg. 'xtts-2' or 'openai-tts' etc, refer to the gai.json keys as a reference,
-    "input": text to be spoken,
-    "voice": speaker name (this will correspond to the list provided by the model parameter specified above),
-    "language": language code (this will correspond to the list provided by the model parameter specified above),
-    "stream": true|false,
-    hyperparameters(eg. these will correspond to the parameters based on the model parameter specified above)
-}
-```
+| Name     | Type | Description                    | Default |
+| -------- | ---- | ------------------------------ | ------- |
+| model    | str  | generator name                 | xtts-2  |
+| input    | str  | text to be spoken              |         |
+| voice    | str  | voice id (speaker)             |         |
+| language | file | language code                  | en      |
+| stream   | bool | True, False                    | True    |
+| ...      |      | Hyperparameters based on model |         |
 
 **- Speech-to-Text**
 Endpoint: http://localhost:12031/gen/v1/audio/transcriptions  
 Method: POST  
-www-encoded-form:
-model: string
-file: file
+Type: Multipart Form-Data
+
+| Name  | Type | Description       | Default |
+| ----- | ---- | ----------------- | ------- |
+| model | str  | generator name    |         |
+| file  | file | audio file object |         |
 
 **- itt: Image-to-Text**
 Endpoint: http://localhost:12031/gen/v1/vision/completions  
 Method: POST
+Type: Body
+Parameters:
+
+| Name     | Type | Description                    | Default |
+| -------- | ---- | ------------------------------ | ------- |
+| model    | str  | generator name                 |         |
+| messages | list | see below                      |         |
+| stream   | bool | True,False                     |         |
+| ...      |      | Hyperparameters based on model |         |
+
+Note:
+
+-   messages format
 
 ```json
-Body: {
-    "model": More specifically, this is the name of the generator, eg. 'llava-transformers' or 'openai-vision' etc, refer to the gai.json keys as a reference,
-    "messages": Follows openai styled message list, [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": text},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": 'data:image/jpeg;base64,.....',
-                    },
+[
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": text},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": 'data:image/jpeg;base64,.....',
                 },
-            ],
-            ...
-        }
-    ],
-    "stream": true|false,
-    hyperparameters(eg. these will correspond to the parameters based on the model parameter specified above)
-}
+            },
+        ],
+        ...
+    }
+]
 ```
 
-You can start the container for the corresponding LLM category and start using via REST API calls.
+**- rag: Retrieval-Augmented Generation**
+
+a) Endpoint: http://localhost:12031/gen/v1/rag/index_file  
+Method: POST  
+Type: Multipart Form-Data
+Parameters:
+
+| Name            | Type | Description                   | Default |
+| --------------- | ---- | ----------------------------- | ------- |
+| collection_name | str  | collection name in the store  |         |
+| file            | file | the document to be indexed    |         |
+| metadata        | dict | metadata tied to the document |         |
+
+b) Endpoint: http://localhost:12031/gen/v1/rag/retrieve  
+Method: POST  
+Type: Body
+Parameters:
+
+| Name            | Type | Description                    | Default |
+| --------------- | ---- | ------------------------------ | ------- |
+| collection_name | str  | collection name in the store   |         |
+| query_texts     | str  | query                          |         |
+| n_results       | int  | no. of nearest result returned |         |
 
 ## 8. Examples
 

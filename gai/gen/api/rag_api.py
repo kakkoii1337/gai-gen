@@ -30,11 +30,20 @@ app=FastAPI(
 dependencies.configure_cors(app)
 semaphore = dependencies.configure_semaphore()
 
-from gai.gen.rag.RAG import RAG
-rag = RAG.GetInstance()
-# Pre-load embedding model
-rag.load()
+from gai.gen import Gaigen
+generator = Gaigen.GetInstance()
 
+# Pre-load default model
+def preload_model():
+    try:
+        # RAG does not use "default" model
+        generator.load("rag")
+    except Exception as e:
+        logger.error(f"Failed to preload default model: {e}")
+preload_model()
+
+# RAG specific
+from gai.gen.rag import RAG
 
 ### ----------------- INDEXING ----------------- ###
 
@@ -51,35 +60,19 @@ class IndexRequest(BaseModel):
 async def index(request: IndexRequest = Body(...)):
     logger.info(f"main.index: collection_name={request.collection_name}")
     metadata = request.model_dump(exclude={"text", "collection_name", "path_or_url","chunk_size","chunk_overlap"})  # metadata = convert to dict - non-metadata fields
-    return rag.index(collection_name=request.collection_name,
+    return generator.index(collection_name=request.collection_name,
         text=request.text, 
         path_or_url=request.path_or_url,
         chunk_size=request.chunk_size,
         chunk_overlap=request.chunk_overlap,
         **metadata)
 
-class IndexChunkRequest(BaseModel):
-    collection_name: str
-    chunk: str
-    path_or_url: str
-    class Config:
-        extra = 'allow'  # Allow extra fields
-
-@app.post("/gen/v1/rag/index_chunk")
-async def index_chunk(request: IndexChunkRequest = Body(...)):
-    metadata = request.model_dump(exclude={"chunk", "collection_name", "path_or_url"})  # metadata = convert to dict - non-metadata fields
-    return rag.index_chunk(collection_name=request.collection_name,
-        chunk=request.chunk, 
-        path_or_url=request.path_or_url,
-        **metadata)
-
-
 @app.post("/gen/v1/rag/index_file")
 async def index_file(collection_name: str=Form(...), file: UploadFile=File(...), metadata: str=Form(...)):
     text = await file.read()
     text = text.decode("utf-8")
     metadata_dict = json.loads(metadata)
-    return rag.index(collection_name=collection_name,
+    return generator.index(collection_name=collection_name,
         text=text, 
         path_or_url=file.filename,
         metadata=metadata_dict)
@@ -91,14 +84,16 @@ class QueryRequest(BaseModel):
     query_texts: str    
     n_results: int = 3
 
+# Retrieve document chunks using semantic search
 # POST /gen/v1/rag/retrieve
 @app.post("/gen/v1/rag/retrieve")
 async def retrieve(request: QueryRequest = Body(...)):
     logger.info(f"main.retrieve: collection_name={request.collection_name}")
-    result = rag.retrieve(collection_name=request.collection_name,query_texts=request.query_texts, n_results=request.n_results)
+    result = generator.retrieve(collection_name=request.collection_name,query_texts=request.query_texts, n_results=request.n_results)
     logger.debug("main.retrieve=",result)
     return result
 
+# Get a document by its ID
 # GET /gen/v1/rag/retrieve?collection_name
 @app.get("/gen/v1/rag/retrieve/{collection_name}/{id}")
 def get_document_by_id(self,collection_name, id):
@@ -107,31 +102,28 @@ def get_document_by_id(self,collection_name, id):
 
 ### ----------------- COLLECTIONS ----------------- ###
 
-# DELETE /gen/v1/rag/delete_collection
+# DELETE /gen/v1/rag/collection/{}
 @app.delete("/gen/v1/rag/collection/{collection_name}")
 async def delete_collection(collection_name):
-    rag.delete_collection(collection_name=collection_name)
+    RAG.delete_collection(collection_name=collection_name)
 
 @app.get("/gen/v1/rag/collection/{collection_name}/count")
 async def get_collection_count(collection_name):
-    return rag.get_collection_count(collection_name)
+    return RAG.get_collection_count(collection_name)
 
+# GET /gen/v1/rag/collection/{}
 @app.get("/gen/v1/rag/collection/{collection_name}")
 async def get_collection(collection_name):
-    col=rag._get_collection(collection_name)
-    return col.get()
+    return RAG.get_collection(collection_name)
 
+# PUT /gen/v1/rag/collection/{}
 @app.put("/gen/v1/rag/collection/{collection_name}")
 async def create_collection(collection_name):
-    # vs.get_collection is equivalent to get or create so its idempotent
-    try:
-        rag._get_collection(collection_name)
-    except:
-        raise HTTPException(status_code=500,detail=f"Failed to create collection {collection_name}.")
+    RAG.get_collection(collection_name)
 
 @app.get("/gen/v1/rag/collections")
 async def list_collections():
-    return rag.list_collections()
+    return RAG.list_collections()
 
 
 # REPOSITORIES --------------------------------------------------------------------------------------------------------
@@ -141,18 +133,23 @@ from sqlalchemy.orm import sessionmaker
 
 from gai.gen.rag.repositories.UserRepository import UserProfileRepository
 from gai.gen.rag.repositories.UserDocumentRepository import UserDocumentRepository
-engine = create_engine(os.environ["SQLALCHEMY_DATABASE_URI"])
-Session = sessionmaker(bind=engine)
+
+def get_session():
+    if not os.environ.get("SQLALCHEMY_DATABASE_URI"):
+        raise Exception("SQLALCHEMY_DATABASE_URI is not set")
+    engine = create_engine(os.environ["SQLALCHEMY_DATABASE_URI"])
+    Session = sessionmaker(bind=engine)
+    return Session()
 
 @app.get("/gen/v1/rag/repositories/user/{user_profile_id}")
 async def user_repository_get_user_by_profile_id(user_profile_id):
-    session = Session()    
+    session = get_session()
     repository = UserProfileRepository(session)
     return repository.get_user_by_id(user_profile_id)
 
 @app.get("/gen/v1/rag/repositories/user_documents/{user_profile_id}")
 async def user_repository_list_user_documents_by_profile_id(user_profile_id):
-    session = Session()    
+    session = get_session()
     repository = UserDocumentRepository(session)
     documents = repository.list_user_documents(user_profile_id)
     session.close()

@@ -94,3 +94,4 @@ def split_chunks(text, chunks_dir=None,chunk_size=2000,chunk_overlap=200):
                 with open(chunk_fname,'w') as f:
                     f.write(chunk.page_content)
     return chunks
+

@@ -9,8 +9,8 @@ pillow==10.2.0
 transformers==4.36.2
 bitsandbytes==0.42.0
 accelerate==0.26.1
+huggingface-hub
 pydantic
 python-dotenv
 uvicorn
 fastapi
-

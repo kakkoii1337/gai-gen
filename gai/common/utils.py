@@ -29,6 +29,9 @@ def get_config():
     config_dir = os.path.abspath(os.path.expanduser(rc["app_dir"]))
     return json.load(open(os.path.join(config_dir, 'gai.json'),'r'))
 
+def this_dir(file):
+    return os.path.dirname(os.path.realpath(file))
+
 # Create ~/.gaiaio/cache
 def mkdir_cache():
     cache_dir = os.path.expanduser('~/.gaiaio/cache')

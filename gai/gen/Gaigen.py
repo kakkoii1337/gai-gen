@@ -6,7 +6,7 @@ class Gaigen:
     __instance = None       # singleton
 
     @staticmethod 
-    def GetInstance(generator_name=None):
+    def GetInstance():
         """Static method to access this singleton class's instance."""
         if Gaigen.__instance == None:
             Gaigen()
@@ -15,7 +15,7 @@ class Gaigen:
     def __init__(self):
         """Virtually private constructor."""
         if Gaigen.__instance is not None:
-            raise Exception("Gaigen: This class is a singleton!")
+            raise Exception("Gaigen: This class is a singleton! Access using GetInstance().")
         else:
             self.config = generators_utils.load_generators_config()
             self.generator_name = None
@@ -24,7 +24,7 @@ class Gaigen:
             Gaigen.__instance = self
 
     # This is idempotent
-    def load(self, generator_name):
+    def load(self,generator_name):
 
         if generator_name is None:
             logger.error("Gaigen.load: generator_name parameter is required.")
@@ -32,7 +32,6 @@ class Gaigen:
         
         if self.generator_name  == generator_name:
             logger.debug("Gaigen.load: Generator is already loaded. Skip loading.")
-            return self.generator
 
         if self.generator_name and self.generator_name != generator_name:
             logger.debug("Gaigen.load: New generator_name specified, unload current generator.")
@@ -61,7 +60,6 @@ class Gaigen:
             logger.info(f"Gaigen: Loading generator {generator_name}...")
             self.generator.load()
             self.generator_name = generator_name
-            return self.generator
         except Exception as e:
             logger.error(f"Gaigen: Error loading generator {generator_name}: {e}")
             raise e
@@ -72,34 +70,46 @@ class Gaigen:
             self.generator = None
 
     def create(self,**model_params):
+        if self.generator is None:
+            logger.error("Gaigen.create: Generator is not loaded.")
+            raise Exception("Gaigen.create: Generator is not loaded.")
         with self.semaphore:
-            self.load()
             return self.generator.create(**model_params)
     
     def token_count(self,text):
-        self.load()
+        if self.generator is None:
+            logger.error("Gaigen.create: Generator is not loaded.")
+            raise Exception("Gaigen.create: Generator is not loaded.")
         if hasattr(self.generator, 'token_count'):
             return self.generator.token_count(text)
         raise Exception("token_count is not supported by this generator.")
 
     def get_token_ids(self,text):
-        self.load()
+        if self.generator is None:
+            logger.error("Gaigen.create: Generator is not loaded.")
+            raise Exception("Gaigen.create: Generator is not loaded.")
         if hasattr(self.generator, 'get_token_ids'):
             return self.generator.get_token_ids(text)
         raise Exception("get_token_ids is not supported by this generator.")
 
-    def index(self, collection_name, text, title, metadata={"source":"unknown"}, chunk_size=None, chunk_overlap=None):
-        if self.generator_name != "rag":
-            logger.error(f"Gaigen.index: The generator {self.generator_name} does not support indexing.")
-            raise Exception(f"Gaigen.index: The generator {self.generator_name} does not support indexing.")
+    def index(self, collection_name, text, path_or_url, metadata={"source":"unknown"}, chunk_size=None, chunk_overlap=None):
+        if self.generator is None:
+            logger.error("Gaigen.create: Generator is not loaded.")
+            raise Exception("Gaigen.create: Generator is not loaded.")
+
+        if self.generator.generator_name != "rag":
+            logger.error(f"Gaigen.index: The generator {self.generator.generator_name} does not support indexing.")
+            raise Exception(f"Gaigen.index: The generator {self.generator.generator_name} does not support indexing.")
         with self.semaphore:
-            self.load()
-            return self.generator.index(collection_name, text, title, metadata, chunk_size, chunk_overlap)
+            return self.generator.index(collection_name, text, path_or_url, metadata, chunk_size, chunk_overlap)
         
     def retrieve(self, collection_name, query_texts, n_results=None):
-        if self.generator_name != "rag":
-            logger.error(f"Gaigen.retrieve: The generator {self.generator_name} does not support retrieval.")
-            raise Exception(f"Gaigen.retrieve: The generator {self.generator_name} does not support retrieval.")
+        if self.generator is None:
+            logger.error("Gaigen.create: Generator is not loaded.")
+            raise Exception("Gaigen.create: Generator is not loaded.")
+
+        if self.generator.generator_name != "rag":
+            logger.error(f"Gaigen.retrieve: The generator {self.generator.generator_name} does not support retrieval.")
+            raise Exception(f"Gaigen.retrieve: The generator {self.generator.generator_name} does not support retrieval.")
         with self.semaphore:
-            self.load()
             return self.generator.retrieve(collection_name, query_texts, n_results)

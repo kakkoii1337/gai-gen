@@ -47,7 +47,10 @@ class ExLlama_TTT:
         logger.info(f"exllama_engine.load: Loading model from {self.model_filepath}")
 
         # model
-        model_config_path = os.path.join(get_config_path(),self.gai_config["model_path"], 'config.json')
+        model_dir=os.path.join(get_config_path(),self.gai_config["model_path"])
+        if not os.path.exists(model_dir):
+            raise Exception("exllama_engine: model_dir is not found")
+        model_config_path = os.path.join(model_dir, 'config.json')
 
         exllama_config = ExLlamaConfig(model_config_path)        
         exllama_config.max_seq_len = self.gai_config["max_seq_len"]
@@ -55,7 +58,7 @@ class ExLlama_TTT:
         self.model = ExLlama(exllama_config)
 
         # tokenizer
-        tokenizer_path= os.path.join(get_config_path(),self.gai_config["model_path"], 'tokenizer.model')
+        tokenizer_path= os.path.join(model_dir, 'tokenizer.model')
         self.tokenizer = ExLlamaTokenizer(tokenizer_path)         
 
         # generator

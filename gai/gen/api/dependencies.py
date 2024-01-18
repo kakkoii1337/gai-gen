@@ -5,10 +5,12 @@ load_dotenv()
 from gai.common.logging import getLogger
 logger = getLogger(__name__)
 import asyncio
+from gai.common.utils import this_dir
 
 def app_version():
-    if os.path.exists("./VERSION"):
-        with open("./VERSION") as f:
+    ver_file=os.path.join(this_dir(__file__),"VERSION")
+    if os.path.exists(ver_file):
+        with open(ver_file) as f:
             return f.read()
     return "Not found."
 APP_VERSION=app_version()
@@ -16,7 +18,10 @@ APP_VERSION=app_version()
 def lib_version():
     import subprocess
     import re
-    command_output = subprocess.check_output("pip list | grep gai-lib-gen", shell=True).decode()
+    try:
+        command_output = subprocess.check_output("pip list | grep gai-lib-gen", shell=True).decode()
+    except subprocess.CalledProcessError:
+        raise Exception("gai-lib-gen is not installed.")
     version = re.search(r'(\d+\.\d+)', command_output)
     if version:
         return version.group()
