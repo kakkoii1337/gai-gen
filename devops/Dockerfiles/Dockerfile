@@ -1,4 +1,4 @@
-FROM kakkoii1337/cu118-cp310-base:latest AS base
+FROM kakkoii1337/cu118-cp310-base:1.0 AS base
 
 ARG CATEGORY=ttt
 
@@ -17,7 +17,6 @@ WORKDIR /app/models
 # Step 4: Install deps
 WORKDIR /app
 COPY "working/requirements_${CATEGORY}.txt" .
-# This will take 5 minutes to uninstall triton 2.0.0 and torch 2.0.1
 RUN pip install pip==23.3.1
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements_${CATEGORY}.txt
 
@@ -27,12 +26,6 @@ COPY ./working/requirements_*.txt .
 COPY ./working/README.md ./working/setup.py ./working/gai.json ./
 COPY ./working/gai ./gai
 RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
-
-# Step 6: Install extra
-COPY ./working/external/LLaVA .
-RUN pip install --no-cache-dir -e .
-COPY ./working/wheels/*.whl .
-RUN pip install *.whl
 
 # Step 7: Cleanup
 RUN apt remove -y python3-dev && \

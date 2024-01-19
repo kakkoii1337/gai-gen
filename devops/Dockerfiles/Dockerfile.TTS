@@ -1,38 +1,36 @@
-FROM kakkoii1337/cu118-cp310-base:latest AS base
+FROM kakkoii1337/cu118-cp310-base:1.0 AS base
 
-ARG GAIGEN_VERSION
+ARG CATEGORY=ttt
 
 # Step 1: Install utils
-RUN apt update -y && apt install -y git git-lfs ffmpeg python3-dev
+RUN apt update -y && apt install -y git git-lfs ffmpeg python3-dev && \
+    apt clean && rm -rf /var/lib/apt/lists/*
 
 # Step 2: Create env variables
 ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64:/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
 ENV MODEL_PATH="/app/models"
 RUN echo '{"app_dir":"/app"}' > /root/.gairc
 
-# Step 3: Create mountpoint
+# Step 3: Create mountpoint for models
 WORKDIR /app/models
 
 # Step 4: Install deps
 WORKDIR /app
-ARG requirements=requirements_tts.txt
-COPY working/${requirements} .
+COPY "working/requirements_${CATEGORY}.txt" .
 RUN pip install pip==23.3.1
-RUN --mount=type=cache,target=/root/.cache/pip pip install -r ${requirements}
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements_${CATEGORY}.txt
 
 # Step 5: Install apps
 WORKDIR /app
 COPY ./working/requirements_*.txt .
-COPY ./working/README.md .
-COPY ./working/setup.py .
-COPY ./working/gai.json .
+COPY ./working/README.md ./working/setup.py ./working/gai.json ./
 COPY ./working/gai ./gai
-RUN cd ./gai
 RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
 
 # Step 6: Start server
+ENV CATEGORY=${CATEGORY}
 WORKDIR /app/gai/gen/api
-CMD ["python", "tts_api.py"]
-
+ENTRYPOINT ["sh", "-c"]
+CMD ["python ${CATEGORY}_api.py"]
 
 

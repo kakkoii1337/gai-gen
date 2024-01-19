@@ -25,9 +25,17 @@ dependencies.configure_cors(app)
 semaphore = dependencies.configure_semaphore()
 
 from gai.gen import Gaigen
-generator = Gaigen.GetInstance()
+gen = Gaigen.GetInstance()
+
 # Pre-load default model
-generator.load("xtts-2")
+def preload_model():
+    try:
+        # RAG does not use "default" model
+        gen.load("xtts-2")
+    except Exception as e:
+        logger.error(f"Failed to preload default model: {e}")
+        raise e
+preload_model()
 
 ### ----------------- TTS ----------------- ###
 class TextToSpeechRequest(BaseModel):
@@ -40,7 +48,6 @@ class TextToSpeechRequest(BaseModel):
 @app.post("/gen/v1/audio/speech")
 async def _text_to_speech(request: TextToSpeechRequest = Body(...)):
     try:
-        gen = Gaigen.GetInstance().load(request.model)
         response = gen.create(
             voice=request.voice,
             input=request.input

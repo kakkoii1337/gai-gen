@@ -60,6 +60,7 @@ class Gaigen:
             logger.info(f"Gaigen: Loading generator {generator_name}...")
             self.generator.load()
             self.generator_name = generator_name
+            return self
         except Exception as e:
             logger.error(f"Gaigen: Error loading generator {generator_name}: {e}")
             raise e
@@ -68,6 +69,7 @@ class Gaigen:
         if self.generator is not None:
             self.generator.unload()
             self.generator = None
+        return self
 
     def create(self,**model_params):
         if self.generator is None:

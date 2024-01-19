@@ -27,14 +27,6 @@ class ModelServiceMismatchError(ErrorResponse):
             message="The model does not correspond to this service."
         )
 
-class PreloadModelError(ErrorResponse):
-    def __init__(self, message):
-        super().__init__(
-            status_code=400,
-            code="preload_model_failure",
-            message=f"The model failed to preload {message}."
-        )
-
 class InternalError(ErrorResponse):
     def __init__(self, message):
         super().__init__(

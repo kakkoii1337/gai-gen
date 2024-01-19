@@ -44,6 +44,7 @@ class ExLlama_TTT:
         self.prompt = None
 
     def load(self):
+        self.unload()
         logger.info(f"exllama_engine.load: Loading model from {self.model_filepath}")
 
         # model

@@ -244,8 +244,6 @@ class Llava_ITT:
             self.load()
         if (len(messages) == 0):
             raise Exception("No messages to create")
-        if (len(messages) > 1):
-            raise Exception("Only one message can be created at a time")
         model_params.pop("model",None)
         message = messages[0]
         if message['role'] != 'user':

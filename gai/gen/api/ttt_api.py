@@ -34,14 +34,18 @@ gen = Gaigen.GetInstance()
 
 # Pre-load default model
 from gai.common.utils import get_config_path, get_config
+DEFAULT_GENERATOR=os.getenv("DEFAULT_GENERATOR")
 def preload_model():
     try:
         gai_config = get_config()
         if "default" in gai_config["gen"]:
             default_generator_name = gai_config["gen"]["default"]
-            gen.load(default_generator_name)
+        if DEFAULT_GENERATOR:
+            default_generator_name = DEFAULT_GENERATOR
+        gen.load(default_generator_name)
     except Exception as e:
-        return PreloadModelError(str(e))
+        logger.error(f"Failed to preload default model: {e}")
+        raise e
 preload_model()
 
 ### ----------------- TTT ----------------- ###
@@ -116,7 +120,7 @@ async def _chat_install(req:ChatInstallRequest):
 
 class ChatDefaultConfigRequest(BaseModel):
     generator_name:str
-    generator_config:Dict[str,Any]
+    generator_config:Optional[Dict[str,Any]]=None
 @app.put("/gen/v1/chat/config")
 async def _chat_default_config(req:ChatDefaultConfigRequest):
     try:
@@ -126,7 +130,8 @@ async def _chat_default_config(req:ChatDefaultConfigRequest):
             config = json.load(f)
             
         config["gen"]["default"] = req.generator_name
-        config["gen"][req.generator_name] = req.generator_config
+        if req.generator_config:
+            config["gen"][req.generator_name] = req.generator_config
 
         # write
         with open(os.path.join(config_path,"gai.json"),'w') as f:

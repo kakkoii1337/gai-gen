@@ -208,9 +208,8 @@ class ExLlamaV2_TTT:
 
     def _should_stop(self,new_text):
         stop_words=self.gai_config.get("stopping_words")
-        #stop_words=["\nuser:","\nassistant:","[/INST]"]
         for stop_word in stop_words:
-            if new_text.endswith(stop_word):
+            if re.search(stop_word+"$",new_text):
                 logger.debug(f"exllama_engine.streaming: stopped by : '{stop_word}'")        
                 return True
         return False

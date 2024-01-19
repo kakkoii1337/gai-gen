@@ -43,13 +43,13 @@ class Transformers_TTT:
             raise Exception("transformers_engine: model_basename is required")
 
         self.gai_config = gai_config
-        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])
+        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])   #not used
         self.model = None
         self.tokenizer = None
         self.generator = None
 
     def load(self):
-        logger.info(f"transformers_enginer: Loading model from {self.gai_config['model_path']}")
+        logger.info(f"transformers_engine: Loading model from {self.gai_config['model_path']}")
 
         self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(get_config_path(),self.gai_config['model_path']))
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -70,7 +70,7 @@ class Transformers_TTT:
         return self
 
     def unload(self):
-        logger.info(f"transformers_enginer: Unloading model...")        
+        logger.info(f"transformers_engine: Unloading model...")        
         try:
             del self.model
             del self.tokenizer

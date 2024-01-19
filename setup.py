@@ -44,6 +44,7 @@ setup(
     extras_require={
         "TTT": parse_requirements("requirements_ttt.txt"),
         "ITT": parse_requirements("requirements_itt.txt"),
+        "ITT2": parse_requirements("requirements_itt2.txt"),
         'STT': parse_requirements("requirements_stt.txt"),
         'TTS': parse_requirements("requirements_tts.txt"),          
         'RAG': parse_requirements("requirements_rag.txt")          

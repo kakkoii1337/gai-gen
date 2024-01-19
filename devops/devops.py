@@ -22,18 +22,21 @@ class Deploy(cmd.Cmd):
             print("Error: ",e)
 
     def _ssh(self,svc):
+        svc=svc.lower()
         self._cmd(f"docker exec -it gai-{svc} bash")
 
     def do_ssh(self,svc):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
+        svc=svc.lower()
         self._ssh(svc)
 
     def do_logs(self,svc):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
+        svc=svc.lower()
         self._cmd(f"docker logs gai-{svc}")
 
     def do_exit(self,ignored):
@@ -44,10 +47,7 @@ class Deploy(cmd.Cmd):
             version = file.readline()
         return version
 
-    def do_publish(self, svc):
-        if not svc:
-            print("Please specify one from ['ttt','stt','tts','itt'] ")
-            return
+    def do_publish(self, ignored):
         self._cmd("cd ~/github/kakkoii1337/gai-gen && python setup.py sdist")
         self._cmd("""cd ~/github/kakkoii1337/gai-gen && for file in dist/*; do
                         twine upload "$file" || true
@@ -71,7 +71,11 @@ class Deploy(cmd.Cmd):
             return
         version =self.get_version()
         self._prepare_working_dir()
-        self._cmd(f"DOCKER_BUILDKIT=1 docker build --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
+        svc=svc.lower()
+        if svc in ["rag","stt"]:
+            self._cmd(f"DOCKER_BUILDKIT=1 docker build --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile .")
+        else:
+            self._cmd(f"DOCKER_BUILDKIT=1 docker build --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
         self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
 
     def do_build_nocache(self,svc):
@@ -80,19 +84,25 @@ class Deploy(cmd.Cmd):
             return
         version =self.get_version()
         self._prepare_working_dir()
-        self._cmd(f"docker build --no-cache --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
+        svc=svc.lower()
+        if svc in ["rag","stt"]:
+            self._cmd(f"docker build --no-cache --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile .")
+        else:
+            self._cmd(f"docker build --no-cache --build-arg CATEGORY={svc} -t gai-{svc}:{version} -f Dockerfiles/Dockerfile.{svc.upper()} .")
         self._cmd(f"docker tag gai-{svc}:{version} gai-{svc}:latest")
 
     def do_stop(self,svc):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
+        svc=svc.lower()
         self._cmd(f"""docker rm -f gai-{svc}""")
 
     def do_start_only(self,svc):
         if not svc:
             print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
             return
+        svc=svc.lower()
         self.do_stop(svc)
         if svc=="rag":
             self._cmd(f"""docker run -d \
@@ -101,7 +111,6 @@ class Deploy(cmd.Cmd):
                 -e SWAGGER_URL={os.environ["SWAGGER_URL"]} \
                 -e OPENAI_API_KEY={os.environ["OPENAI_API_KEY"]} \
                 -e ANTHROPIC_API_KEY={os.environ["ANTHROPIC_API_KEY"]} \
-                -e SQLALCHEMY_DATABASE_URI={os.environ["SQLALCHEMY_DATABASE_URI"]} \
                 --gpus all \
                 -v ~/gai/models:/app/models \
                 gai-{svc}:latest
@@ -188,27 +197,25 @@ class Deploy(cmd.Cmd):
     #             gai-{svc}:latest
     #             """)
 
-    # def do_start_idle(self,svc):
-    #     if not svc:
-    #         print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
-    #         return
-    #     self.do_stop(svc)
-    #     self.do_build_only(svc)
-    #     self._cmd(f"""docker run \
-    #         -d \
-    #         --name gai-{svc} \
-    #         -p 12031:12031 \
-    #         -e SWAGGER_URL={os.environ["SWAGGER_URL"]} \
-    #         -e OPENAI_API_KEY={os.environ["OPENAI_API_KEY"]} \
-    #         -e ANTHROPIC_API_KEY={os.environ["ANTHROPIC_API_KEY"]} \
-    #         -e SQLALCHEMY_DATABASE_URI={os.environ["SQLALCHEMY_DATABASE_URI"]} \
-    #         --gpus all \
-    #         -v ~/gai/models:/app/models \
-    #         gai-{svc}:latest \
-    #         /bin/bash -c "tail -f /dev/null"
-    #         """)
-
-
+    def do_start_idle(self,svc):
+        if not svc:
+            print("Please specify one from ['ttt','stt','tts','itt','rag'] ")
+            return
+        self.do_stop(svc)
+        self.do_build_only(svc)
+        self._cmd(f"""docker run \
+            -it \
+            --rm \
+            --name gai-{svc} \
+            -p 12031:12031 \
+            -e SWAGGER_URL={os.environ["SWAGGER_URL"]} \
+            -e OPENAI_API_KEY={os.environ["OPENAI_API_KEY"]} \
+            -e ANTHROPIC_API_KEY={os.environ["ANTHROPIC_API_KEY"]} \
+            --gpus all \
+            -v ~/gai/models:/app/models \
+            gai-{svc}:latest \
+            bash -c "tail -f /dev/null"
+            """)
 
     def do_push(self,svc):
         if not svc:

@@ -12,20 +12,30 @@ import dependencies
 dependencies.configure_logging()
 from gai.common.logging import getLogger
 logger = getLogger(__name__)
+logger.info(f"Starting Gai Generators Service v{dependencies.APP_VERSION}")
+logger.info(f"Version of gai_lib installed = {dependencies.LIB_VERSION}")
 swagger_url = dependencies.get_swagger_url()
 app=FastAPI(
     title="Gai Generators Service",
     description="""Gai Generators Service""",
-    version="0.0.1",
+    version=dependencies.APP_VERSION,
     docs_url=swagger_url
     )
 dependencies.configure_cors(app)
 semaphore = dependencies.configure_semaphore()
 
 from gai.gen import Gaigen
-generator = Gaigen.GetInstance()
+gen = Gaigen.GetInstance()
+
 # Pre-load default model
-generator.load("llava-transformers")
+def preload_model():
+    try:
+        # RAG does not use "default" model
+        gen.load("llava-transformers")
+    except Exception as e:
+        logger.error(f"Failed to preload default model: {e}")
+        raise e
+preload_model()
 
 ### ----------------- ITT ----------------- ###
 class ImageToTextRequest(BaseModel):
@@ -39,7 +49,6 @@ class ImageToTextRequest(BaseModel):
 async def _image_to_text(request: ImageToTextRequest = Body(...)):
     try:
         model = request.model
-        gen = Gaigen.GetInstance().load(model)
         messages = request.messages
         model_params = request.dict(exclude={"model", "messages","stream"})  # Get extra fields
         stream = request.stream
