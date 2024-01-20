@@ -141,4 +141,13 @@ async def _chat_default_config(req:ChatDefaultConfigRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=12031)
+
+    config = uvicorn.Config(
+        app=app, 
+        host="0.0.0.0", 
+        port=12031, 
+        timeout_keep_alive=180,
+        timeout_notify=150
+    )
+    server = uvicorn.Server(config=config)
+    server.run()

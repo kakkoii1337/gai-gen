@@ -236,6 +236,7 @@ class ExLlamaV2_TTT:
         ids = self.tokenizer.encode(prompt)
         self.client.gen_begin_reuse(ids)
         id = str(uuid4())
+
         for i in range(max_new_tokens):
             token = self.client.gen_single_token()
             text = self.tokenizer.decode(self.client.sequence[0])
@@ -250,10 +251,10 @@ class ExLlamaV2_TTT:
                 logger.debug(f"exllama_engine.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
                 yield self.parse_chunk_output(id,new_token, "stop")
                 return
-
+            
             if self._should_stop(new_text):
-                yield self.parse_chunk_output(id,new_token, "stop")
-                return            
+                #yield self.parse_chunk_output(id,new_token, "stop")
+                return self.parse_chunk_output(id,"", "stop")
 
             #if break_on_newline and 
             # could add `break_on_newline` as a GenerateRequest option?
@@ -321,23 +322,20 @@ class ExLlamaV2_TTT:
         return response
 
     def _apply_template(self, prompt:List):
-        prompt = generators_utils.chat_list_to_string(prompt)
-        #prompt_template= "<s>[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n{user_message} [/INST]"
-        #prompt_template = "<s>[INST] {prompt} [/INST]"
-        #prompt = prompt_template.format(prompt=content)
-
-        prompt_template = self.gai_config.get("prompt_template")
-        if prompt_template:
-            prompt = prompt_template.format(user_message=prompt)
-
+        prompt=generators_utils.chat_list_to_string(prompt)
+        #prompt = generators_utils.chat_list_to_INST(prompt)
         return prompt
 
     def _remove_template(self, output:str):
-        prompt_template_mask = r'<s>\[INST\].*?\[/INST\]\s*'
-        return re.sub(prompt_template_mask, '', output, flags=re.S)
+        prompt=generators_utils.chat(prompt)
+        output = re.split('\n.+:',output)[-1].strip()
+        return output
 
     def create(self,messages,**model_params):
         self.prompt=self._apply_template(messages)
+        if not self.prompt:
+            raise Exception("ExllamaV2_TTT: prompt is required")
+        
         if not self.client:
             self.load()
 

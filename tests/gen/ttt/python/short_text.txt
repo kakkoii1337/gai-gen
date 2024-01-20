@@ -1,0 +1,6 @@
+
+user: Tell me a one paragraph story
+
+
+assistant:
+

@@ -32,6 +32,7 @@ class Gaigen:
         
         if self.generator_name  == generator_name:
             logger.debug("Gaigen.load: Generator is already loaded. Skip loading.")
+            return self
 
         if self.generator_name and self.generator_name != generator_name:
             logger.debug("Gaigen.load: New generator_name specified, unload current generator.")

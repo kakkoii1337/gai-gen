@@ -327,22 +327,17 @@ class ExLlama_TTT:
 
     def _apply_template(self, prompt:List):
         prompt = generators_utils.chat_list_to_string(prompt)
-        #prompt_template= "<s>[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n{user_message} [/INST]"
-        #prompt_template = "<s>[INST] {prompt} [/INST]"
-        #prompt = prompt_template.format(prompt=content)
-
-        prompt_template = self.gai_config.get("prompt_template")
-        if prompt_template:
-            prompt = prompt_template.format(user_message=prompt)
-
         return prompt
 
     def _remove_template(self, output:str):
-        prompt_template_mask = r'<s>\[INST\].*?\[/INST\]\s*'
-        return re.sub(prompt_template_mask, '', output, flags=re.S)
+        output = re.split('\n.+:',output)[-1].strip()
+        return output
 
     def create(self,messages,**model_params):
         self.prompt=self._apply_template(messages)
+        if not self.prompt:
+            raise Exception("Exllama_TTT: prompt is required")
+
         if not self.client:
             self.load()
 

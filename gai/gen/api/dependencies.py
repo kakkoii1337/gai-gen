@@ -6,6 +6,7 @@ from gai.common.logging import getLogger
 logger = getLogger(__name__)
 import asyncio
 from gai.common.utils import this_dir
+import httpx
 
 def app_version():
     ver_file=os.path.join(this_dir(__file__),"VERSION")
