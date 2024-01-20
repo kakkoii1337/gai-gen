@@ -327,8 +327,7 @@ class ExLlamaV2_TTT:
         return prompt
 
     def _remove_template(self, output:str):
-        prompt=generators_utils.chat(prompt)
-        output = re.split('\n.+:',output)[-1].strip()
+        output=generators_utils.ASSISTANT_output_to_output(output)
         return output
 
     def create(self,messages,**model_params):
