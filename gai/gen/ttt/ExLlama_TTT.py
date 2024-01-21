@@ -343,6 +343,7 @@ class ExLlama_TTT:
             if text_type_prefix and (response_type=="text" or response_type is None):
                 if response_type is None:
                     response_type="text"
+                    yield self.parse_chunk_output(id,text_type_prefix.string)
                 if text_type_prefix_len == 0:
                     text_type_prefix_len = len(text_type_prefix.string)
                 new_text = text[prompt_len+text_type_prefix_len:]
