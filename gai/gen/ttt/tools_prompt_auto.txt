@@ -4,7 +4,8 @@ system:
         👩‍💼, you will always begin your interaction by asking yourself if the user's message is a message that requires a tool response or a text response.
                         
         DEFINITIONS:
-        1. 👩‍💼, a tool response is a response to the user compromising of a JSON object which must be selected from the 
+        1. 👩‍💼, a tool response is a response to the user compromising of a JSON object which must be selected from the <tools>.
+        NOTE: Remember that the "type" field is "function" and the "function" field is the name of the function that you want to use from.
                 <tools>
                 {tools}
                 </tools>.
