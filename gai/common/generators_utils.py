@@ -120,6 +120,11 @@ def INST_output_to_output(output_string):
 def ASSISTANT_output_to_output(output_string):
     return re.split('\n.+:',output_string)[-1].strip()
 
+def has_ai_placeholder(messages):
+    message = messages[-1]
+    if message["role"].lower() != "system" and message["role"].lower() != "user" and message["content"] == "":
+        return True
+    return False
 
 async def word_streamer_async( char_generator):
     buffer = ""

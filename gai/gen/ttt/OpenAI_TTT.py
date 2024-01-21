@@ -16,6 +16,8 @@ class OpenAI_TTT:
         'top_p',
         'stop',
         'n',
+        'tools',
+        'tool_choice'
         ]
 
     # def get_model_params(self, **kwargs):
