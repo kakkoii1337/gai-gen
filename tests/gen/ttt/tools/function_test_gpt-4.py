@@ -21,16 +21,16 @@ messages = chat_string_to_list(context)
 print("\nlong context")
 response = g.create(messages=messages,stream=True,max_new_tokens=1000,tools=tools)
 for chunk in response:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content,end="",flush=True)
-    if chunk.choices[0].delta.tool_calls:
-        print(chunk.choices[0].delta.tool_calls,end="",flush=True)
+    
+    if chunk.choices[0].delta:
+        print(chunk)
 
-#        print(chunk.choices[0].delta,end="",flush=True)
-#        if chunk.choices[0].delta.tool_calls:
-#                 if chunk.choices[0].delta.tool_calls[0].function.name:
-#                         print(chunk.choices[0].delta.tool_calls[0].function.name,end="",flush=True)
-#                 elif chunk.choices[0].delta.tool_calls[0].function.arguments:
-#                         print(chunk.choices[0].delta.tool_calls[0].function.arguments,end="",flush=True)
-#                 else:
-#                         print(chunk.choices[0].delta.tool_calls[0].function,end="",flush=True)
+#     if chunk.choices[0].delta.content:
+#         print(chunk.choices[0].delta.content,end="",flush=True)
+
+#     if chunk.choices[0].delta.tool_calls and chunk.choices[0].delta.tool_calls[0].function.name:
+#         print(chunk.choices[0].delta.tool_calls[0].function.name,end="",flush=True)
+
+#     if chunk.choices[0].delta.tool_calls and chunk.choices[0].delta.tool_calls[0].function.arguments:
+#         print(chunk.choices[0].delta.tool_calls[0].function.name,end="",flush=True)
+

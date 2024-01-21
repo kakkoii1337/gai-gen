@@ -282,7 +282,7 @@ class ExLlama_TTT:
         created = OutputBuilder.Generate_CreationTime()
         tool_id = OutputBuilder.Generate_ToolCall_Id()
         tool_name=None
-        parameters=None
+        tool_args=''
 
         for i in range(max_new_tokens):
             token = self.client.gen_single_token()
@@ -299,60 +299,52 @@ class ExLlama_TTT:
                     response_type="tools"
                     tools_type_prefix_len = len(tools_type_prefix.string)
 
-                # This is the generated text string
+
                 new_text = text[prompt_len+tools_type_prefix_len:]
 
-                # This is the new sub-word decoded from the token
+                # Get new decoded token by taking difference from last response.
+                # This is equivalent to new_token = self.tokenizer.decode(token) but faster.
                 new_token = new_text.replace(last_text, "")
-
-                if len(buffer) < max_new_tokens - i:
-                    buffer.append(new_token)
-                else:
-                    raise Exception("ExLlama_TTT.streaming: Tool call error due to exceeded max_new_tokens.")
-
-                # Find tool name and yield output start
-                if not tool_name:
-                    tool_name_re = r'(\")?name(\")?\s*:\s*\"(.*?)\",'
-                    match = re.search(tool_name_re,new_text)
-                    if match:
-                        tool_name = match.group(3)
-                        logger.debug(f"ExLlama_TTT.streaming: tool_name={tool_name}")
-                        # Yield Tool Output Start                
-                        output = OutputBuilder.Build_Tool_Start(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,role="assistant",tool_id=tool_id,tool_name=tool_name)
-                        yield output
-
-                # Find args and yield output body
-                if not parameters:
-                    match = re.search(r'"parameters":(\s*\{[\s\S]*?\})', new_text)
-                    if match:
-                        parameters = match.group(1).strip()
-                        output = OutputBuilder.Build_Tool_Body(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,tool_arg=parameters)
-                        yield output
 
                 # stop by natural end of sentence
                 if token.item() == self.tokenizer.eos_token_id:
                     logger.debug(f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
-                    output = OutputBuilder.Build_Tool_End(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,finish_reason="tool_calls")
+                    buffer_str="".join(buffer)
+
+                    JSON_SUFFIX_RE = r'\s*"\s*}\s*$'
+                    buffer_str=re.sub(JSON_SUFFIX_RE, '',buffer_str)
+                    yield self.parse_tools_output(id,name="",arguments=buffer_str,finish_reason="stop")
                     self.client.end_beam_search() 
-                    yield output
-                    return
+                    return self.parse_tools_output(id,name="",arguments="",finish_reason="stop")
+
+                # Add new token to a 10 token buffer:
+                if len(buffer) < 10:
+                    buffer.append(new_token)
+                else:
+                    # Remove oldest token from buffer and add new token
+                    output_token = buffer[0]
+                    yield self.parse_tools_output(id,name="",arguments=output_token)
+                    buffer = buffer[1:]
+                    buffer.append(new_token)
 
                 # Stop by stopping words
                 for stop_word in stopping_words:
-                    if new_text.endswith(stop_word):
+                    buffer_str="".join(buffer)
+                    if buffer_str.endswith(stop_word):
                         logger.debug(f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
-                        output = OutputBuilder.Build_Tool_End(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,finish_reason="stop")
+                        buffer_str=buffer_str.replace(stop_word,"")
+                        yield self.parse_tools_output(id,name="",arguments=buffer_str)
                         self.client.end_beam_search() 
-                        yield output
-                        return
+                        return self.parse_tools_output(id,name="",arguments="",finish_reason="stop")
 
                 # Stop by max_new_tokens
-                if  i == max_new_tokens - prompt_len - tools_type_prefix_len:
+                if i == max_new_tokens - 1 - len(buffer):
                     logger.debug(f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
-                    output = OutputBuilder.Build_Tool_End(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,finish_reason="length")
+                    # Yield all tokens in buffer
+                    buffer_str="".join(buffer)
+                    yield self.parse_tools_output(id,name="",arguments=buffer_str)
                     self.client.end_beam_search() 
-                    yield output
-                    return
+                    return self.parse_tools_output(id,name="",arguments="", finish_reason="length")
 
             #TEXT_TYPE_PREFIX = " {\n    \"type\": \"text\",\n    \"text\": \""
             #TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
