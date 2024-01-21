@@ -1,50 +1,51 @@
-[
-        {
-                "type": "function", 
-                "function": 
-                {
-                        "name": "gg", 
-                        "description": "Search google based on the provided search query", 
-                        "parameters": 
+                
+                [
                         {
-                                "type": "object", 
-                                "properties": 
+                                "type": "function", 
+                                "function": 
                                 {
-                                        "search_query": 
+                                        "name": "gg", 
+                                        "description": "Search google based on the provided search query", 
+                                        "parameters": 
                                         {
-                                                "type": "string", 
-                                                "description": "The search query to search google with"
+                                                "type": "object", 
+                                                "properties": 
+                                                {
+                                                        "search_query": 
+                                                        {
+                                                                "type": "string", 
+                                                                "description": "The search query to search google with"
+                                                        }
+                                                }, 
+                                        "required": 
+                                        [
+                                                "search_query"
+                                        ]
                                         }
-                                }, 
-                        "required": 
-                        [
-                                "search_query"
-                        ]
-                        }
-                }
-        }, 
-        {
-                "type": "function", 
-                "function": 
-                {
-                        "name": "scrape", 
-                        "description": "Scrape the content of the provided url", 
-                        "parameters": 
+                                }
+                        }, 
                         {
-                                "type": "object", 
-                                "properties": 
+                                "type": "function", 
+                                "function": 
                                 {
-                                        "url": 
+                                        "name": "scrape", 
+                                        "description": "Scrape the content of the provided url", 
+                                        "parameters": 
                                         {
-                                                "type": "string", 
-                                                "description": "The url to scrape the content from"
+                                                "type": "object", 
+                                                "properties": 
+                                                {
+                                                        "url": 
+                                                        {
+                                                                "type": "string", 
+                                                                "description": "The url to scrape the content from"
+                                                        }
+                                                }, 
+                                        "required": 
+                                        [
+                                                "url"
+                                        ]
                                         }
-                                }, 
-                        "required": 
-                        [
-                                "url"
-                        ]
+                                }
                         }
-                }
-        }
-]
+                ]

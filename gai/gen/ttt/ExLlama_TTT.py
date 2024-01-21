@@ -226,6 +226,26 @@ class ExLlama_TTT:
                 return True
         return False
 
+    # TODO: To be used in future.
+    def _check_response_type(self,prompt,**model_params):
+        max_new_tokens = model_params["max_new_tokens"] if "max_new_tokens" in model_params and model_params["max_new_tokens"] is not None else 200        
+        for i in range(max_new_tokens):
+            token = self.client.gen_single_token()
+            text = self.tokenizer.decode(self.client.sequence[0])
+            new_text = text[len(prompt):]
+
+            TOOLS_TYPE_PREFIX_RE = r'\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
+            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE,new_text)            
+            if tools_type_prefix:
+                return "tools"
+
+            #TEXT_TYPE_PREFIX = " {\n    \"type\": \"text\",\n    \"text\": \""
+            #TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
+            TEXT_TYPE_PREFIX_RE = r'\s*[^{]'
+            text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE,new_text)
+            if text_type_prefix:
+                return "text"
+
     def _streaming(self,prompt,**model_params):
 
         stopping_words = self.gai_config["stopping_words"]
@@ -254,16 +274,75 @@ class ExLlama_TTT:
         text_type_prefix_len = 0
         tools_type_prefix_len = 0
         prompt_len = len(prompt)
+
+        response_type=None
+
         for i in range(max_new_tokens):
             token = self.client.gen_single_token()
             text = self.tokenizer.decode(self.client.sequence[0])
             new_text = text[len(prompt):]
 
+            TOOLS_TYPE_PREFIX_RE = r'^\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
+            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE,new_text)            
+            if tools_type_prefix and (response_type=="tools" or response_type is None):
+                if response_type is None:
+                    response_type="tools"
+                if tools_type_prefix_len == 0:
+                    tools_type_prefix_len = len(tools_type_prefix.string)
+                new_text = text[prompt_len+tools_type_prefix_len:]
+
+                # Get new decoded token by taking difference from last response.
+                # This is equivalent to new_token = self.tokenizer.decode(token) but faster.
+                new_token = new_text.replace(last_text, "")
+
+                # stop by natural end of sentence
+                if token.item() == self.tokenizer.eos_token_id:
+                    logger.debug(f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
+                    buffer_str="".join(buffer)
+
+                    JSON_SUFFIX_RE = r'\s*"\s*}\s*$'
+                    buffer_str=re.sub(JSON_SUFFIX_RE, '',buffer_str)
+                    yield self.parse_tools_output(id,name="",arguments=buffer_str,finish_reason="stop")
+                    self.client.end_beam_search() 
+                    return self.parse_tools_output(id,name="",arguments="",finish_reason="stop")
+
+                # Add new token to a 10 token buffer:
+                if len(buffer) < 10:
+                    buffer.append(new_token)
+                else:
+                    # Remove oldest token from buffer and add new token
+                    output_token = buffer[0]
+                    yield self.parse_tools_output(id,name="",arguments=output_token)
+                    buffer = buffer[1:]
+                    buffer.append(new_token)
+
+                # Stop by stopping words
+                for stop_word in stopping_words:
+                    buffer_str="".join(buffer)
+                    if buffer_str.endswith(stop_word):
+                        logger.debug(f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
+                        buffer_str=buffer_str.replace(stop_word,"")
+                        yield self.parse_tools_output(id,name="",arguments=buffer_str)
+                        self.client.end_beam_search() 
+                        return self.parse_tools_output(id,name="",arguments="",finish_reason="stop")
+
+                # Stop by max_new_tokens
+                if i == max_new_tokens - 1 - len(buffer):
+                    logger.debug(f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
+                    # Yield all tokens in buffer
+                    buffer_str="".join(buffer)
+                    yield self.parse_tools_output(id,name="",arguments=buffer_str)
+                    self.client.end_beam_search() 
+                    return self.parse_tools_output(id,name="",arguments="", finish_reason="length")
+
             #TEXT_TYPE_PREFIX = " {\n    \"type\": \"text\",\n    \"text\": \""
-            TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
+            #TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
+            TEXT_TYPE_PREFIX_RE = r'^\s*[^{\s]'
             text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE,new_text)
 
-            if text_type_prefix:
+            if text_type_prefix and (response_type=="text" or response_type is None):
+                if response_type is None:
+                    response_type="text"
                 if text_type_prefix_len == 0:
                     text_type_prefix_len = len(text_type_prefix.string)
                 new_text = text[prompt_len+text_type_prefix_len:]
@@ -314,57 +393,6 @@ class ExLlama_TTT:
 
                 # Update last_text so that it can be used to derive new_token next round
                 last_text = new_text
-
-            TOOLS_TYPE_PREFIX_RE = r'\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
-            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE,new_text)            
-            if tools_type_prefix:
-                if tools_type_prefix_len == 0:
-                    tools_type_prefix_len = len(tools_type_prefix.string)
-                new_text = text[prompt_len+tools_type_prefix_len:]
-
-                # Get new decoded token by taking difference from last response.
-                # This is equivalent to new_token = self.tokenizer.decode(token) but faster.
-                new_token = new_text.replace(last_text, "")
-
-                # stop by natural end of sentence
-                if token.item() == self.tokenizer.eos_token_id:
-                    logger.debug(f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
-                    buffer_str="".join(buffer)
-
-                    JSON_SUFFIX_RE = r'\s*"\s*}\s*$'
-                    buffer_str=re.sub(JSON_SUFFIX_RE, '',buffer_str)
-                    yield self.parse_tools_output(id,name="",arguments=buffer_str,finish_reason="stop")
-                    self.client.end_beam_search() 
-                    return self.parse_tools_output(id,name="",arguments="",finish_reason="stop")
-
-                # Add new token to a 10 token buffer:
-                if len(buffer) < 10:
-                    buffer.append(new_token)
-                else:
-                    # Remove oldest token from buffer and add new token
-                    output_token = buffer[0]
-                    yield self.parse_tools_output(id,name="",arguments=output_token)
-                    buffer = buffer[1:]
-                    buffer.append(new_token)
-
-                # Stop by stopping words
-                for stop_word in stopping_words:
-                    buffer_str="".join(buffer)
-                    if buffer_str.endswith(stop_word):
-                        logger.debug(f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
-                        buffer_str=buffer_str.replace(stop_word,"")
-                        yield self.parse_tools_output(id,name="",arguments=buffer_str)
-                        self.client.end_beam_search() 
-                        return self.parse_tools_output(id,name="",arguments="",finish_reason="stop")
-
-                # Stop by max_new_tokens
-                if i == max_new_tokens - 1 - len(buffer):
-                    logger.debug(f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
-                    # Yield all tokens in buffer
-                    buffer_str="".join(buffer)
-                    yield self.parse_tools_output(id,name="",arguments=buffer_str)
-                    self.client.end_beam_search() 
-                    return self.parse_tools_output(id,name="",arguments="", finish_reason="length")
 
         # Update last_text so that it can be used to derive new_token next round
         last_text = new_text
@@ -495,12 +523,15 @@ class ExLlama_TTT:
             with open(os.path.join(this_dir(__file__),prompt_file), "r") as f:
                 tools_prompt = f.read()
             system_message = chat_string_to_list(tools_prompt)[0]
-            #system_message["content"] = system_message["content"].format(tools=tools)
+
+            # Somehow, removing the tools indentation fixed the issue of the tools not being recognized.
+            tools_json=json.loads(tools)
+            tools = json.dumps(tools_json)
+            tools = tools.replace("{","{ ").replace("}"," }")
+
+            system_message["content"] = system_message["content"].format(tools=tools)
         else:
-            prompt_file = "text_prompt.txt"
-            with open(os.path.join(this_dir(__file__),prompt_file), "r") as f:
-                text_prompt = f.read()
-            system_message = chat_string_to_list(text_prompt)[0]
+            return messages
 
         ai_placeholder=None
         if has_ai_placeholder(messages):
@@ -516,6 +547,7 @@ class ExLlama_TTT:
     def create(self,messages,**model_params):
         messages = self._apply_tools_message(messages,**model_params)
         self.prompt=self._apply_template(messages)
+
         if not self.prompt:
             raise Exception("Exllama_TTT: prompt is required")
 

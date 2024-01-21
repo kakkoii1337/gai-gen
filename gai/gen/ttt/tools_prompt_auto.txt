@@ -6,56 +6,7 @@ system:
         DEFINITIONS:
         1. 👩‍💼, a tool response is a response to the user compromising of a JSON object which must be selected from the 
                 <tools>
-                [
-                        {
-                                "type": "function", 
-                                "function": 
-                                {
-                                        "name": "gg", 
-                                        "description": "Search google based on the provided search query", 
-                                        "parameters": 
-                                        {
-                                                "type": "object", 
-                                                "properties": 
-                                                {
-                                                        "search_query": 
-                                                        {
-                                                                "type": "string", 
-                                                                "description": "The search query to search google with"
-                                                        }
-                                                }, 
-                                        "required": 
-                                        [
-                                                "search_query"
-                                        ]
-                                        }
-                                }
-                        }, 
-                        {
-                                "type": "function", 
-                                "function": 
-                                {
-                                        "name": "scrape", 
-                                        "description": "Scrape the content of the provided url", 
-                                        "parameters": 
-                                        {
-                                                "type": "object", 
-                                                "properties": 
-                                                {
-                                                        "url": 
-                                                        {
-                                                                "type": "string", 
-                                                                "description": "The url to scrape the content from"
-                                                        }
-                                                }, 
-                                        "required": 
-                                        [
-                                                "url"
-                                        ]
-                                        }
-                                }
-                        }
-                ]
+                {tools}
                 </tools>.
         2. A text response is a normal text response that you would provide to the user.
         
