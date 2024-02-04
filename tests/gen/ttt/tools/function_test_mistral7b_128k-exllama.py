@@ -1,32 +1,49 @@
+from print_response import print_response
 from gai.common.generators_utils import chat_string_to_list
 from gai.gen import Gaigen
 import json
 g = Gaigen.GetInstance().load("mistral7b_128k-exllama")
-with open("./tests/gen/ttt/tools/tools.txt","r") as f:
-        tools = json.load(f)
+with open("./tests/gen/ttt/tools/tools.txt", "r") as f:
+    tools = json.load(f)
 
-# This call should not invoke the tools
-# with open("./tests/gen/ttt/tools/short_text.txt","r") as f:
-#         context = f.read()
-# messages = chat_string_to_list(context)
-# print("\nshort context")
-# response = g.create(messages=messages,stream=True,max_new_tokens=1000,tools=tools)
-# for chunk in response:
-#     print(chunk.choices[0].delta.content,end="",flush=True)
+context = """
+system:
 
-# This call should invoke the tools
-with open("./tests/gen/ttt/tools/long_text.txt","r") as f:
-        context = f.read()
+        You are a helpful assistant tasked to assist the User in completing various tasks such as answering questions, 
+        providing recommendations, helping with decision making, and more. You must always do what the user tells you to. 
+        You will do your best to give the User the most accurate and relevant information. 
+        If you do not know the answer, just say I don't know. Do not make up an answer.
+
+user:
+
+        Tell me the latest news on Singapore
+
+assistant:"""
 messages = chat_string_to_list(context)
-print("\nTools Prompt with Tools")
-response = g.create(messages=messages,stream=True,max_new_tokens=1000,tools=tools)
+print("\nShould Invoke Tools")
+response = g.create(messages=messages, stream=True,
+                    max_new_tokens=1000, tools=tools)
+
+print_response(response)
+
+
+context = """
+system:
+
+        You are a helpful assistant tasked to assist the User in completing various tasks such as answering questions, 
+        providing recommendations, helping with decision making, and more. You must always do what the user tells you to. 
+        You will do your best to give the User the most accurate and relevant information. 
+        If you do not know the answer, just say I don't know. Do not make up an answer.
+
+user:
+
+        Tell me a one paragraph story
+
+assistant:"""
+messages = chat_string_to_list(context)
+print("\nShould not invoke Tools")
+response = g.create(messages=messages, stream=True,
+                    max_new_tokens=1000, tools=tools)
 for chunk in response:
     if chunk.choices[0].delta.content:
-        print("CONTENT")
-        print(chunk.choices[0].delta.content)
-    if chunk.choices[0].delta.tool_calls and chunk.choices[0].delta.tool_calls[0].function.name:
-        print("NAME")
-        print(chunk.choices[0].delta.tool_calls[0].function.name)
-    if chunk.choices[0].delta.tool_calls and chunk.choices[0].delta.tool_calls[0].function.arguments:
-        print("ARGUMENTS")
-        print(chunk.choices[0].delta.tool_calls[0].function.arguments)
+        print(chunk.choices[0].delta.content, end="", flush=True)

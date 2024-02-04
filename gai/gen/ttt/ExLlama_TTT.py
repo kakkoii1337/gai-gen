@@ -1,24 +1,28 @@
-import torch, gc, re,os
+from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
+from gai.gen.ttt.OutputBuilder import OutputBuilder
+import re
+import json
+from typing import List
+from datetime import datetime
+from uuid import uuid4
+from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall, ChoiceDeltaToolCallFunction
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk, Choice as ChunkChoice, ChoiceDelta
+from exllama.generator import ExLlamaGenerator as ExLlamaGen
+from exllama.tokenizer import ExLlamaTokenizer
+from exllama.model import ExLlama, ExLlamaCache, ExLlamaConfig
+import torch
+import gc
+import re
+import os
 from gai.common import logging, generators_utils
 from gai.common.utils import this_dir, get_config_path
 from gai.common.generators_utils import chat_string_to_list, has_ai_placeholder
 logger = logging.getLogger(__name__)
-from exllama.model import ExLlama, ExLlamaCache, ExLlamaConfig
-from exllama.tokenizer import ExLlamaTokenizer
-from exllama.generator import ExLlamaGenerator as ExLlamaGen
-from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage, Choice , CompletionUsage
-from openai.types.chat.chat_completion_chunk import ChatCompletionChunk, Choice as ChunkChoice, ChoiceDelta
-from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall, ChoiceDeltaToolCallFunction
-from uuid import uuid4
-from datetime import datetime
-from typing import List
-import json
-import re
-from gai.gen.ttt.OutputBuilder import OutputBuilder
+
 
 class ExLlama_TTT:
 
-    param_whitelist=[
+    param_whitelist = [
         "temperature",
         "top_k",
         "top_p",
@@ -33,9 +37,9 @@ class ExLlama_TTT:
         "stream",
         "tools",
         "tool_choice"
-        ]
+    ]
 
-    def __init__(self,gai_config):
+    def __init__(self, gai_config):
         if (gai_config is None):
             raise Exception("ExLlama_TTT: gai_config is required")
         if "model_path" not in gai_config or gai_config["model_path"] is None:
@@ -44,7 +48,8 @@ class ExLlama_TTT:
             raise Exception("ExLlama_TTT: model_basename is required")
 
         self.gai_config = gai_config
-        self.model_filepath = os.path.join(get_config_path(), gai_config["model_path"], gai_config["model_basename"])+".safetensors"
+        self.model_filepath = os.path.join(get_config_path(
+        ), gai_config["model_path"], gai_config["model_basename"])+".safetensors"
         self.model = None
         self.tokenizer = None
         self.client = None
@@ -52,25 +57,28 @@ class ExLlama_TTT:
 
     def load(self):
         self.unload()
-        logger.info(f"ExLlama_TTT.load: Loading model from {self.model_filepath}")
+        logger.info(
+            f"ExLlama_TTT.load: Loading model from {self.model_filepath}")
 
         # model
-        model_dir=os.path.join(get_config_path(),self.gai_config["model_path"])
+        model_dir = os.path.join(
+            get_config_path(), self.gai_config["model_path"])
         if not os.path.exists(model_dir):
             raise Exception("ExLlama_TTT: model_dir is not found")
         model_config_path = os.path.join(model_dir, 'config.json')
 
-        exllama_config = ExLlamaConfig(model_config_path)        
+        exllama_config = ExLlamaConfig(model_config_path)
         exllama_config.max_seq_len = self.gai_config["max_seq_len"]
         exllama_config.model_path = self.model_filepath
         self.model = ExLlama(exllama_config)
 
         # tokenizer
-        tokenizer_path= os.path.join(model_dir, 'tokenizer.model')
-        self.tokenizer = ExLlamaTokenizer(tokenizer_path)         
+        tokenizer_path = os.path.join(model_dir, 'tokenizer.model')
+        self.tokenizer = ExLlamaTokenizer(tokenizer_path)
 
         # generator
-        self.client = ExLlamaGen(self.model, self.tokenizer, ExLlamaCache(self.model))
+        self.client = ExLlamaGen(
+            self.model, self.tokenizer, ExLlamaCache(self.model))
 
         return self
 
@@ -80,7 +88,7 @@ class ExLlama_TTT:
             del self.tokenizer
             del self.client
             del self.prompt
-        except :
+        except:
             pass
         self.model = None
         self.tokenizer = None
@@ -92,35 +100,46 @@ class ExLlama_TTT:
     def token_count(self, text):
         if self.tokenizer is None:
             raise Exception("ExLlama_TTT: tokenizer is not loaded")
-        encoded=self.tokenizer.encode(text)
+        encoded = self.tokenizer.encode(text)
         return len(encoded.tolist()[0])
 
-    def get_response(self,output,ai_role="ASSISTANT"):
+    def get_response(self, output, ai_role="ASSISTANT"):
         return re.split(rf'{ai_role}:', output, flags=re.IGNORECASE)[-1].strip().replace('\n\n', '\n').replace('</s>', '')
 
-    def _init_settings(self,model_params):
-        self.client.settings.temperature = model_params["temperature"] if "temperature" in model_params and model_params["temperature"] is not None else self.client.settings.temperature
-        self.client.settings.top_p = model_params["top_p"] if "top_p" in model_params and model_params["top_p"] is not None else self.client.settings.top_p
-        self.client.settings.min_p = model_params["min_p"] if "min_p" in model_params and model_params["min_p"] is not None else self.client.settings.min_p
-        self.client.settings.top_k = model_params["top_k"] if "top_k" in model_params and model_params["top_k"] is not None else self.client.settings.top_k
+    def _init_settings(self, model_params):
+        self.client.settings.temperature = model_params["temperature"] if "temperature" in model_params and model_params[
+            "temperature"] is not None else self.client.settings.temperature
+        self.client.settings.top_p = model_params["top_p"] if "top_p" in model_params and model_params[
+            "top_p"] is not None else self.client.settings.top_p
+        self.client.settings.min_p = model_params["min_p"] if "min_p" in model_params and model_params[
+            "min_p"] is not None else self.client.settings.min_p
+        self.client.settings.top_k = model_params["top_k"] if "top_k" in model_params and model_params[
+            "top_k"] is not None else self.client.settings.top_k
 
-        self.client.settings.token_repetition_penalty_max = model_params["token_repetition_penalty_max"] if "token_repetition_penalty_max" in model_params and model_params["token_repetition_penalty_max"] is not None else self.client.settings.token_repetition_penalty_max
-        self.client.settings.token_repetition_penalty_sustain = model_params["token_repetition_penalty_sustain"] if "token_repetition_penalty_sustain" in model_params and model_params["token_repetition_penalty_sustain"] is not None else self.client.settings.token_repetition_penalty_sustain
-        self.client.settings.token_repetition_penalty_decay = model_params["token_repetition_penalty_decay"] if "token_repetition_penalty_decay" in model_params and model_params["token_repetition_penalty_decay"] is not None else self.client.settings.token_repetition_penalty_decay
-        
-        self.client.settings.typical = model_params["typical"] if "typical" in model_params and model_params["typical"] is not None else self.client.settings.typical
-        self.client.settings.beams = model_params["beams"] if "beams" in model_params and model_params["beams"] is not None else self.client.settings.beams
-        self.client.settings.beam_length = model_params["beam_length"] if "beam_length" in model_params and model_params["beam_length"] is not None else self.client.settings.beam_length
+        self.client.settings.token_repetition_penalty_max = model_params["token_repetition_penalty_max"] if "token_repetition_penalty_max" in model_params and model_params[
+            "token_repetition_penalty_max"] is not None else self.client.settings.token_repetition_penalty_max
+        self.client.settings.token_repetition_penalty_sustain = model_params["token_repetition_penalty_sustain"] if "token_repetition_penalty_sustain" in model_params and model_params[
+            "token_repetition_penalty_sustain"] is not None else self.client.settings.token_repetition_penalty_sustain
+        self.client.settings.token_repetition_penalty_decay = model_params["token_repetition_penalty_decay"] if "token_repetition_penalty_decay" in model_params and model_params[
+            "token_repetition_penalty_decay"] is not None else self.client.settings.token_repetition_penalty_decay
 
-    def _generate_simple(self, prompt, max_new_tokens = 128):
+        self.client.settings.typical = model_params["typical"] if "typical" in model_params and model_params[
+            "typical"] is not None else self.client.settings.typical
+        self.client.settings.beams = model_params["beams"] if "beams" in model_params and model_params[
+            "beams"] is not None else self.client.settings.beams
+        self.client.settings.beam_length = model_params["beam_length"] if "beam_length" in model_params and model_params[
+            "beam_length"] is not None else self.client.settings.beam_length
+
+    def _generate_simple(self, prompt, max_new_tokens=128):
         logger.debug(f"ExLlama_TTT._generate_simple: prompt={prompt}")
-        
+
         max_seq_len = self.gai_config["max_seq_len"]
         self.client.end_beam_search()
-        ids, mask = self.client.tokenizer.encode(prompt, return_mask = True, max_seq_len = max_seq_len)
+        ids, mask = self.client.tokenizer.encode(
+            prompt, return_mask=True, max_seq_len=max_seq_len)
 
         try:
-            self.client.gen_begin(ids, mask = mask)
+            self.client.gen_begin(ids, mask=mask)
         except RuntimeError as e:
             if ((str(e).find("exceeds dimension size") != -1)):
                 raise Exception("context_length_exceeded")
@@ -128,75 +147,79 @@ class ExLlama_TTT:
 
         max_new_tokens = min(max_new_tokens, max_seq_len - ids.shape[1])
 
-        finish_reason="length"
-        eos = torch.zeros((ids.shape[0],), dtype = torch.bool)
+        finish_reason = "length"
+        eos = torch.zeros((ids.shape[0],), dtype=torch.bool)
         for i in range(max_new_tokens):
-            token = self.client.gen_single_token(mask = mask)
+            token = self.client.gen_single_token(mask=mask)
             for j in range(token.shape[0]):
-                if token[j, 0].item() == self.client.tokenizer.eos_token_id: eos[j] = True
-            if eos.all(): 
-                finish_reason="stop"
+                if token[j, 0].item() == self.client.tokenizer.eos_token_id:
+                    eos[j] = True
+            if eos.all():
+                finish_reason = "stop"
                 break
 
-        text = self.client.tokenizer.decode(self.client.sequence[0] if self.client.sequence.shape[0] == 1 else self.client.sequence)
-        return {"output":text, "finish_reason":finish_reason}
+        text = self.client.tokenizer.decode(
+            self.client.sequence[0] if self.client.sequence.shape[0] == 1 else self.client.sequence)
+        return {"output": text, "finish_reason": finish_reason}
 
-    def _generating(self, prompt,**model_params):
+    def _generating(self, prompt, **model_params):
         logger.debug(f"ExLlama_TTT.generate: prompt={prompt}")
 
         # Map "max_tokens" to "max_new_tokens" to be compatible with OpenAI's API. We do not want to filter this off.
         if "max_tokens" in model_params and model_params["max_tokens"] is not None:
-            model_params["max_new_tokens"]=model_params.pop("max_tokens")
+            model_params["max_new_tokens"] = model_params.pop("max_tokens")
 
         # Temperature approach 0 but cannot be 0
-        if "temperature" in model_params and model_params["temperature"]==0:
-            model_params["temperature"]=10e-10
+        if "temperature" in model_params and model_params["temperature"] == 0:
+            model_params["temperature"] = 10e-10
 
-        model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = {**self.gai_config["hyperparameters"],**model_params}
+        model_params = generators_utils.filter_params(
+            model_params, self.param_whitelist)
+        model_params = {**self.gai_config["hyperparameters"], **model_params}
         logger.debug(f"ExLlama_TTT.generate: model_params={model_params}")
-        
-        input_count=self.token_count(prompt)
+
+        input_count = self.token_count(prompt)
         logger.debug(f"ExLlama_TTT.generate: input token count={input_count}")
 
         self._init_settings(model_params)
         max_new_tokens = model_params["max_new_tokens"] if "max_new_tokens" in model_params and model_params["max_new_tokens"] is not None else 200
 
-        response = self._generate_simple(prompt,max_new_tokens=max_new_tokens)
-        
+        response = self._generate_simple(prompt, max_new_tokens=max_new_tokens)
+
         logger.debug(f"ExLlama_TTT.generate: raw output={response}")
-        
+
         # Prepare response
         id = str(uuid4())
-        response = self.parse_generating_output(id=id, output=response['output'], finish_reason=response['finish_reason'])
+        response = self.parse_generating_output(
+            id=id, output=response['output'], finish_reason=response['finish_reason'])
         return response
 
     # SAMPLE RESPONSE:
     # ChatCompletion(
-    #    id='chatcmpl-8YquW981VnABKGP0HhIigugRttQWu', 
+    #    id='chatcmpl-8YquW981VnABKGP0HhIigugRttQWu',
     #    choices=[
     #        Choice(
-    #           finish_reason='length', 
-    #           index=0, 
-    #           logprobs=None, 
+    #           finish_reason='length',
+    #           index=0,
+    #           logprobs=None,
     #           message=ChatCompletionMessage(
-    #               content='Once upon a time in a bustling city lived a scruffy, little stray dog named Baxter. Despite his hardships, Baxter had a heart full of hope and would wag his tail at every passerby, hoping someone would take him home. One icy winter day, a kind-hearted woman named Lucy noticed him shivering in a corner. Lucy, who had recently lost her beloved pet, felt an immediate connection with Baxter. Overwhelmed with compassion, she decided to adopt him right then. From that day', 
-    #               role='assistant', 
-    #               function_call=None, 
-    #               tool_calls=None))], 
-    #   created=1703317232, 
-    #   model='gpt-4-0613', 
-    #   object='chat.completion', 
-    #   system_fingerprint=None, 
+    #               content='Once upon a time in a bustling city lived a scruffy, little stray dog named Baxter. Despite his hardships, Baxter had a heart full of hope and would wag his tail at every passerby, hoping someone would take him home. One icy winter day, a kind-hearted woman named Lucy noticed him shivering in a corner. Lucy, who had recently lost her beloved pet, felt an immediate connection with Baxter. Overwhelmed with compassion, she decided to adopt him right then. From that day',
+    #               role='assistant',
+    #               function_call=None,
+    #               tool_calls=None))],
+    #   created=1703317232,
+    #   model='gpt-4-0613',
+    #   object='chat.completion',
+    #   system_fingerprint=None,
     #   usage=CompletionUsage(completion_tokens=100, prompt_tokens=34, total_tokens=134))
-    def parse_generating_output(self, id, output,finish_reason):
+    def parse_generating_output(self, id, output, finish_reason):
         output = self._remove_template(output)
         prompt_tokens = self.token_count(self.prompt)
         completion_tokens = self.token_count(output)
         total_tokens = prompt_tokens + completion_tokens
         created = int(datetime.now().timestamp())
         response = ChatCompletion(
-            id=id,                
+            id=id,
             choices=[
                 Choice(
                     # "stop","length","content_filter"
@@ -204,9 +227,9 @@ class ExLlama_TTT:
                     index=0,
                     logprobs=None,
                     message=ChatCompletionMessage(
-                        content=output, 
-                        role='assistant', 
-                        function_call=None, 
+                        content=output,
+                        role='assistant',
+                        function_call=None,
                         tool_calls=None
                     ))
             ],
@@ -214,40 +237,42 @@ class ExLlama_TTT:
             model=self.gai_config["model_name"],
             object="chat.completion",
             system_fingerprint=None,
-            usage=CompletionUsage(completion_tokens=completion_tokens,prompt_tokens=prompt_tokens,total_tokens=total_tokens)
-            )
-        return response    
+            usage=CompletionUsage(completion_tokens=completion_tokens,
+                                  prompt_tokens=prompt_tokens, total_tokens=total_tokens)
+        )
+        return response
 
-    def _should_stop(self,new_text):
-        stop_words=self.gai_config.get("stopping_words")
+    def _should_stop(self, new_text):
+        stop_words = self.gai_config.get("stopping_words")
         stop_words.append("\"\n}")
         for stop_word in stop_words:
-            if re.search(stop_word+"$",new_text):
-                logger.debug(f"ExLlama_TTT._should_stop: stopped by : '{stop_word}'")        
+            if re.search(stop_word+"$", new_text):
+                logger.debug(
+                    f"ExLlama_TTT._should_stop: stopped by : '{stop_word}'")
                 return True
         return False
 
     # TODO: To be used in future.
-    def _check_response_type(self,prompt,**model_params):
-        max_new_tokens = model_params["max_new_tokens"] if "max_new_tokens" in model_params and model_params["max_new_tokens"] is not None else 200        
+    def _check_response_type(self, prompt, **model_params):
+        max_new_tokens = model_params["max_new_tokens"] if "max_new_tokens" in model_params and model_params["max_new_tokens"] is not None else 200
         for i in range(max_new_tokens):
             token = self.client.gen_single_token()
             text = self.tokenizer.decode(self.client.sequence[0])
             new_text = text[len(prompt):]
 
             TOOLS_TYPE_PREFIX_RE = r'\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
-            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE,new_text)            
+            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE, new_text)
             if tools_type_prefix:
                 return "tools"
 
-            #TEXT_TYPE_PREFIX = " {\n    \"type\": \"text\",\n    \"text\": \""
-            #TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
+            # TEXT_TYPE_PREFIX = " {\n    \"type\": \"text\",\n    \"text\": \""
+            # TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
             TEXT_TYPE_PREFIX_RE = r'\s*[^{]'
-            text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE,new_text)
+            text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE, new_text)
             if text_type_prefix:
                 return "text"
 
-    def _streaming(self,prompt,**model_params):
+    def _streaming(self, prompt, **model_params):
 
         stopping_words = self.gai_config["stopping_words"]
 
@@ -255,12 +280,13 @@ class ExLlama_TTT:
         last_text = ""
 
         logger.debug(f"ExLlama_TTT.streaming: prompt={prompt}")
-        model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = {**self.gai_config["hyperparameters"],**model_params}
+        model_params = generators_utils.filter_params(
+            model_params, self.param_whitelist)
+        model_params = {**self.gai_config["hyperparameters"], **model_params}
 
         logger.debug(f"model_params: {model_params}")
 
-        input_count=self.token_count(prompt)
+        input_count = self.token_count(prompt)
         logger.debug(f"ExLlama_TTT.streaming: input token count={input_count}")
 
         self._init_settings(model_params)
@@ -270,33 +296,34 @@ class ExLlama_TTT:
         ids = self.tokenizer.encode(prompt)
         self.client.gen_begin_reuse(ids)
         id = str(uuid4())
-        idx=0
-        buffer=[]
+        idx = 0
+        buffer = []
         text_type_prefix_len = 0
         tools_type_prefix_len = 0
         prompt_len = len(prompt)
 
-        response_type=None
+        response_type = None
 
         chunk_id = OutputBuilder.Generate_ChatCompletion_Id()
         created = OutputBuilder.Generate_CreationTime()
         tool_id = OutputBuilder.Generate_ToolCall_Id()
-        tool_name=None
-        parameters=None
+        tool_name = None
+        parameters = None
 
         for i in range(max_new_tokens):
             token = self.client.gen_single_token()
             text = self.tokenizer.decode(self.client.sequence[0])
             new_text = text[len(prompt):]
 
+            # eg. {"type":"function","function":{"name":"gg","arguments":"{\n    \"query\": \"What is the capital of France?\"\n}"}
             TOOLS_TYPE_PREFIX_RE = r'^\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
-            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE,new_text)            
-            if tools_type_prefix and (response_type=="tools" or response_type is None):
+            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE, new_text)
+            if tools_type_prefix and (response_type == "tools" or response_type is None):
 
                 # ------------------ When it reaches here, that means it is a tool call ------------------
 
                 if response_type is None:
-                    response_type="tools"
+                    response_type = "tools"
                     tools_type_prefix_len = len(tools_type_prefix.string)
 
                 # This is the generated text string
@@ -308,61 +335,71 @@ class ExLlama_TTT:
                 if len(buffer) < max_new_tokens - i:
                     buffer.append(new_token)
                 else:
-                    raise Exception("ExLlama_TTT.streaming: Tool call error due to exceeded max_new_tokens.")
+                    raise Exception(
+                        "ExLlama_TTT.streaming: Tool call error due to exceeded max_new_tokens.")
 
                 # Find tool name and yield output start
                 if not tool_name:
                     tool_name_re = r'(\")?name(\")?\s*:\s*\"(.*?)\",'
-                    match = re.search(tool_name_re,new_text)
+                    match = re.search(tool_name_re, new_text)
                     if match:
                         tool_name = match.group(3)
-                        logger.debug(f"ExLlama_TTT.streaming: tool_name={tool_name}")
-                        # Yield Tool Output Start                
-                        output = OutputBuilder.Build_Tool_Start(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,role="assistant",tool_id=tool_id,tool_name=tool_name)
+                        logger.debug(
+                            f"ExLlama_TTT.streaming: tool_name={tool_name}")
+                        # Yield Tool Output Start
+                        output = OutputBuilder.Build_Tool_Start(
+                            created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, role="assistant", tool_id=tool_id, tool_name=tool_name)
                         yield output
 
                 # Find args and yield output body
                 if not parameters:
-                    match = re.search(r'"parameters":(\s*\{[\s\S]*?\})', new_text)
+                    match = re.search(
+                        r'"parameters":(\s*\{[\s\S]*?\})', new_text)
                     if match:
                         parameters = match.group(1).strip()
-                        output = OutputBuilder.Build_Tool_Body(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,tool_arg=parameters)
+                        output = OutputBuilder.Build_Tool_Body(
+                            created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, tool_arg=parameters)
                         yield output
 
                 # stop by natural end of sentence
                 if token.item() == self.tokenizer.eos_token_id:
-                    logger.debug(f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
-                    output = OutputBuilder.Build_Tool_End(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,finish_reason="tool_calls")
-                    self.client.end_beam_search() 
+                    logger.debug(
+                        f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
+                    output = OutputBuilder.Build_Tool_End(
+                        created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, finish_reason="tool_calls")
+                    self.client.end_beam_search()
                     yield output
                     return
 
                 # Stop by stopping words
                 for stop_word in stopping_words:
                     if new_text.endswith(stop_word):
-                        logger.debug(f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
-                        output = OutputBuilder.Build_Tool_End(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,finish_reason="stop")
-                        self.client.end_beam_search() 
+                        logger.debug(
+                            f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
+                        output = OutputBuilder.Build_Tool_End(
+                            created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, finish_reason="stop")
+                        self.client.end_beam_search()
                         yield output
                         return
 
                 # Stop by max_new_tokens
-                if  i == max_new_tokens - prompt_len - tools_type_prefix_len:
-                    logger.debug(f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
-                    output = OutputBuilder.Build_Tool_End(created=created,model=self.gai_config["model_name"],chunk_id=chunk_id,finish_reason="length")
-                    self.client.end_beam_search() 
+                if i == max_new_tokens - prompt_len - tools_type_prefix_len:
+                    logger.debug(
+                        f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
+                    output = OutputBuilder.Build_Tool_End(
+                        created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, finish_reason="length")
+                    self.client.end_beam_search()
                     yield output
                     return
 
-            #TEXT_TYPE_PREFIX = " {\n    \"type\": \"text\",\n    \"text\": \""
-            #TEXT_TYPE_PREFIX_RE = r'\s*{\s*(\")?type(\")?\s*:\s*"text",\s*(\")?text(\")?\s*:\s*"'
+            # TEXT_TYPE_PREFIX_RE = string that does not begin with "{"
             TEXT_TYPE_PREFIX_RE = r'^\s*[^{\s]'
-            text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE,new_text)
+            text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE, new_text)
 
-            if text_type_prefix and (response_type=="text" or response_type is None):
+            if text_type_prefix and (response_type == "text" or response_type is None):
                 if response_type is None:
-                    response_type="text"
-                    yield self.parse_chunk_output(id,text_type_prefix.string)
+                    response_type = "text"
+                    yield self.parse_chunk_output(id, text_type_prefix.string)
                 if text_type_prefix_len == 0:
                     text_type_prefix_len = len(text_type_prefix.string)
                 new_text = text[prompt_len+text_type_prefix_len:]
@@ -373,14 +410,15 @@ class ExLlama_TTT:
 
                 # stop by natural end of sentence
                 if token.item() == self.tokenizer.eos_token_id:
-                    logger.debug(f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
-                    buffer_str="".join(buffer)
+                    logger.debug(
+                        f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
+                    buffer_str = "".join(buffer)
 
                     JSON_SUFFIX_RE = r'\s*"\s*}\s*$'
-                    buffer_str=re.sub(JSON_SUFFIX_RE, '',buffer_str)
-                    yield self.parse_chunk_output(id,buffer_str)
-                    self.client.end_beam_search() 
-                    return self.parse_chunk_output(id,"", "stop")
+                    buffer_str = re.sub(JSON_SUFFIX_RE, '', buffer_str)
+                    yield self.parse_chunk_output(id, buffer_str)
+                    self.client.end_beam_search()
+                    return self.parse_chunk_output(id, "", "stop")
 
                 # Add new token to a 10 token buffer:
                 if len(buffer) < 10:
@@ -388,28 +426,30 @@ class ExLlama_TTT:
                 else:
                     # Remove oldest token from buffer and add new token
                     output_token = buffer[0]
-                    yield self.parse_chunk_output(id,output_token)
+                    yield self.parse_chunk_output(id, output_token)
                     buffer = buffer[1:]
                     buffer.append(new_token)
 
                 # Stop by stopping words
                 for stop_word in stopping_words:
-                    buffer_str="".join(buffer)
+                    buffer_str = "".join(buffer)
                     if buffer_str.endswith(stop_word):
-                        logger.debug(f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
-                        buffer_str=buffer_str.replace(stop_word,"")
-                        yield self.parse_chunk_output(id,buffer_str)
-                        self.client.end_beam_search() 
-                        return self.parse_chunk_output(id,"", "stop")
+                        logger.debug(
+                            f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
+                        buffer_str = buffer_str.replace(stop_word, "")
+                        yield self.parse_chunk_output(id, buffer_str)
+                        self.client.end_beam_search()
+                        return self.parse_chunk_output(id, "", "stop")
 
                 # Stop by max_new_tokens
                 if i == max_new_tokens - 1 - len(buffer):
-                    logger.debug(f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
+                    logger.debug(
+                        f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
                     # Yield all tokens in buffer
-                    buffer_str="".join(buffer)
-                    yield self.parse_chunk_output(id,buffer_str)
-                    self.client.end_beam_search() 
-                    return self.parse_chunk_output(id,"", "length")
+                    buffer_str = "".join(buffer)
+                    yield self.parse_chunk_output(id, buffer_str)
+                    self.client.end_beam_search()
+                    return self.parse_chunk_output(id, "", "length")
 
                 # Update last_text so that it can be used to derive new_token next round
                 last_text = new_text
@@ -418,61 +458,61 @@ class ExLlama_TTT:
         last_text = new_text
 
         # all done:
-        self.client.end_beam_search() 
+        self.client.end_beam_search()
         return
 
     # Sample:
-    #ChatCompletionChunk(
-    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u', 
+    # ChatCompletionChunk(
+    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u',
     #     choices=[
-    #          Choice(delta=ChoiceDelta(content='', function_call=None, role='assistant', tool_calls=None), 
-    #          finish_reason=None, 
-    #          index=0, 
+    #          Choice(delta=ChoiceDelta(content='', function_call=None, role='assistant', tool_calls=None),
+    #          finish_reason=None,
+    #          index=0,
     #          logprobs=None)],
     #     created=1703314868,
     #     model='gpt-4-0613',
     #     object='chat.completion.chunk',
     #     system_fingerprint=None)
-    #.....
-    #ChatCompletionChunk(
+    # .....
+    # ChatCompletionChunk(
     #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u',
     #     choices=[
-    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role=None, tool_calls=None), 
-    #          finish_reason='length', 
+    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role=None, tool_calls=None),
+    #          finish_reason='length',
     #          index=0,
-    #          logprobs=None)], 
-    #     created=1703314868, 
-    #     model='gpt-4-0613', 
-    #     object='chat.completion.chunk', 
+    #          logprobs=None)],
+    #     created=1703314868,
+    #     model='gpt-4-0613',
+    #     object='chat.completion.chunk',
     #     system_fingerprint=None)
-    def parse_chunk_output(self, id, output,finish_reason=None):
+    def parse_chunk_output(self, id, output, finish_reason=None):
         created = int(datetime.now().timestamp())
         response = ChatCompletionChunk(
-            id=id,                
+            id=id,
             choices=[
                 ChunkChoice(
-                    delta=ChoiceDelta(content=output, function_call=None, role='assistant', tool_calls=None),
+                    delta=ChoiceDelta(
+                        content=output, function_call=None, role='assistant', tool_calls=None),
                     # "stop","length","content_filter"
                     finish_reason=finish_reason,
                     index=0,
                     logprobs=None,
                     message=output
-                    )
+                )
             ],
             created=created,
             model=self.gai_config["model_name"],
             object="chat.completion.chunk",
             system_fingerprint=None,
             usage=None
-            )
+        )
         return response
 
-
     # Sample:
-    #ChatCompletionChunk(
-    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u', 
+    # ChatCompletionChunk(
+    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u',
     #     choices=[
-    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role='assistant', tool_calls=[ChoiceDeltaToolCall(index=0, id='call_LEJiFROo4iNIKMU7C7UGHiwc', function=ChoiceDeltaToolCallFunction(arguments='', name='gg'), type='function')]),finish_reason=None, index=0, logprobs=None), 
+    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role='assistant', tool_calls=[ChoiceDeltaToolCall(index=0, id='call_LEJiFROo4iNIKMU7C7UGHiwc', function=ChoiceDeltaToolCallFunction(arguments='', name='gg'), type='function')]),finish_reason=None, index=0, logprobs=None),
     #          ...
     #          Choice(delta=ChoiceDelta(content=None, function_call=None, role=None, tool_calls=[ChoiceDeltaToolCall(index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments='{\n', name=None), type=None)]), finish_reason=None, index=0, logprobs=None)
     #          ...
@@ -482,22 +522,21 @@ class ExLlama_TTT:
     #     model='gpt-4-0613',
     #     object='chat.completion.chunk',
     #     system_fingerprint=None)
-    #.....
-    def parse_tools_output(self, id, name, arguments,finish_reason=None, type=None):
+    # .....
+    def parse_tools_output(self, id, name, arguments, finish_reason=None, type=None):
 
-        
-        if type=="head":
+        if type == "head":
             tool_call = ChoiceDeltaToolCall(
-                index=0, 
-                id=id, 
+                index=0,
+                id=id,
                 function=ChoiceDeltaToolCallFunction(
-                    arguments='', 
-                    name=name), 
+                    arguments='',
+                    name=name),
                 type='function')
             delta = ChoiceDelta(
-                content=None, 
-                function_call=None, 
-                role='assistant', 
+                content=None,
+                function_call=None,
+                role='assistant',
                 tool_calls=[tool_call])
             choices = [ChunkChoice(
                 delta=delta,
@@ -506,9 +545,9 @@ class ExLlama_TTT:
                 index=0,
                 logprobs=None,
                 message=None
-                )]
+            )]
             response = ChatCompletionChunk(
-                id=id,                
+                id=id,
                 choices=choices,
                 created=int(datetime.now().timestamp()),
                 model=self.gai_config["model_name"],
@@ -516,18 +555,18 @@ class ExLlama_TTT:
                 system_fingerprint=None,
                 usage=None
             )
-        if type=="body":
+        if type == "body":
             tool_call = ChoiceDeltaToolCall(
-                index=0, 
-                id=id, 
+                index=0,
+                id=id,
                 function=ChoiceDeltaToolCallFunction(
-                    arguments='', 
-                    name=name), 
+                    arguments='',
+                    name=name),
                 type='function')
             delta = ChoiceDelta(
-                content=None, 
-                function_call=None, 
-                role='assistant', 
+                content=None,
+                function_call=None,
+                role='assistant',
                 tool_calls=[tool_call])
             choices = [ChunkChoice(
                 delta=delta,
@@ -536,9 +575,9 @@ class ExLlama_TTT:
                 index=0,
                 logprobs=None,
                 message=None
-                )]
+            )]
             response = ChatCompletionChunk(
-                id=id,                
+                id=id,
                 choices=choices,
                 created=int(datetime.now().timestamp()),
                 model=self.gai_config["model_name"],
@@ -546,48 +585,47 @@ class ExLlama_TTT:
                 system_fingerprint=None,
                 usage=None
             )
-
 
         response = ChatCompletionChunk(
-                id=id,                
-                choices=[
-                    ChunkChoice(
-                        delta=ChoiceDelta(content=None, function_call=None, role='assistant', tool_calls=[
-                            ChoiceDeltaToolCall(
-                                id=id,
-                                index=0,
-                                type='function',
-                                function=ChoiceDeltaToolCallFunction(
-                                    name=name, 
-                                    arguments=arguments
-                                )
+            id=id,
+            choices=[
+                ChunkChoice(
+                    delta=ChoiceDelta(content=None, function_call=None, role='assistant', tool_calls=[
+                        ChoiceDeltaToolCall(
+                            id=id,
+                            index=0,
+                            type='function',
+                            function=ChoiceDeltaToolCallFunction(
+                                name=name,
+                                arguments=arguments
                             )
-                        ]),
-                        # "stop","length","content_filter"
-                        finish_reason=finish_reason,
-                        index=0,
-                        logprobs=None,
-                        message=None
-                    )
-                ],
-                created=int(datetime.now().timestamp()),
-                model=self.gai_config["model_name"],
-                object="chat.completion.chunk",
-                system_fingerprint=None,
-                usage=None
-            )
-        
+                        )
+                    ]),
+                    # "stop","length","content_filter"
+                    finish_reason=finish_reason,
+                    index=0,
+                    logprobs=None,
+                    message=None
+                )
+            ],
+            created=int(datetime.now().timestamp()),
+            model=self.gai_config["model_name"],
+            object="chat.completion.chunk",
+            system_fingerprint=None,
+            usage=None
+        )
+
         return response
 
-    def _apply_template(self, prompt:List):
+    def _apply_template(self, prompt: List):
         prompt = generators_utils.chat_list_to_string(prompt)
         return prompt
 
-    def _remove_template(self, output:str):
-        output = re.split('\n.+:',output)[-1].strip()
+    def _remove_template(self, output: str):
+        output = re.split('\n.+:', output)[-1].strip()
         return output
 
-    def _apply_tools_message(self, messages:List,**model_params):
+    def _apply_tools_message(self, messages: List, **model_params):
         # Check if tools are required
         if "tools" in model_params and model_params["tools"] is not None:
             tools = json.dumps(model_params["tools"], indent=4)
@@ -596,20 +634,27 @@ class ExLlama_TTT:
                 tool_choice = model_params["tool_choice"]
             if tool_choice == "auto":
                 prompt_file = "tools_prompt_auto.txt"
-            with open(os.path.join(this_dir(__file__),prompt_file), "r") as f:
+            with open(os.path.join(this_dir(__file__), prompt_file), "r") as f:
                 tools_prompt = f.read()
             system_message = chat_string_to_list(tools_prompt)[0]
 
             # Somehow, removing the tools indentation fixed the issue of the tools not being recognized.
-            tools_json=json.loads(tools)
+            tools_json = json.loads(tools)
             tools = json.dumps(tools_json)
-            tools = tools.replace("{","{ ").replace("}"," }")
-
-            system_message["content"] = system_message["content"].format(tools=tools)
+            tools = re.sub(r'/s+', ' ', tools)
+            tools = tools.replace("{", "{ ").replace("}", " }")
+            try:
+                system_message["content"] = system_message["content"].format(
+                    tools=tools)
+            except Exception as e:
+                logger.error(
+                    f"ExLlama_TTT._apply_tools_message: Error applying tools message: {e}")
+                raise Exception(
+                    "ExLlama_TTT._apply_tools_message: Error applying tools template.")
         else:
             return messages
 
-        ai_placeholder=None
+        ai_placeholder = None
         if has_ai_placeholder(messages):
             ai_placeholder = messages.pop()
         user_message = messages.pop()
@@ -620,9 +665,9 @@ class ExLlama_TTT:
 
         return messages
 
-    def create(self,messages,**model_params):
-        messages = self._apply_tools_message(messages,**model_params)
-        self.prompt=self._apply_template(messages)
+    def create(self, messages, **model_params):
+        messages = self._apply_tools_message(messages, **model_params)
+        self.prompt = self._apply_template(messages)
 
         if not self.prompt:
             raise Exception("Exllama_TTT: prompt is required")
@@ -630,8 +675,9 @@ class ExLlama_TTT:
         if not self.client:
             self.load()
 
-        model_params=generators_utils.filter_params(model_params, self.param_whitelist)
-        model_params = {**self.gai_config["hyperparameters"],**model_params}
+        model_params = generators_utils.filter_params(
+            model_params, self.param_whitelist)
+        model_params = {**self.gai_config["hyperparameters"], **model_params}
         stream = model_params.pop("stream", False)
 
         if not stream:
@@ -645,5 +691,3 @@ class ExLlama_TTT:
             prompt=self.prompt,
             **model_params
         ))
-
-        
