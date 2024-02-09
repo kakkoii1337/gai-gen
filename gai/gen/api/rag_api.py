@@ -1,7 +1,5 @@
 from gai.gen.api.globals import status_updater
 from gai.gen.api.status_update_router import status_update_router
-from gai.gen.rag.repositories.UserDocumentRepository import UserDocumentRepository
-from gai.gen.rag.repositories.UserRepository import UserProfileRepository
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from gai.gen.rag import RAG
@@ -70,22 +68,21 @@ class IndexRequest(BaseModel):
         extra = 'allow'  # Allow extra fields
 
 
-@app.post("/gen/v1/rag/index")
-async def index(request: IndexRequest = Body(...)):
-    try:
-        logger.info(f"main.index: collection_name={request.collection_name}")
-        # metadata = convert to dict - non-metadata fields
-        metadata = request.model_dump(
-            exclude={"text", "collection_name", "path_or_url", "chunk_size", "chunk_overlap"})
-        return gen.index(collection_name=request.collection_name,
-                         text=request.text,
-                         path_or_url=request.path_or_url,
-                         chunk_size=request.chunk_size,
-                         chunk_overlap=request.chunk_overlap,
-                         **metadata)
-    except Exception as e:
-        return InternalError(str(e))
-
+# @app.post("/gen/v1/rag/index")
+# async def index(request: IndexRequest = Body(...)):
+#     try:
+#         logger.info(f"main.index: collection_name={request.collection_name}")
+#         # metadata = convert to dict - non-metadata fields
+#         metadata = request.model_dump(
+#             exclude={"text", "collection_name", "path_or_url", "chunk_size", "chunk_overlap"})
+#         return gen.index(collection_name=request.collection_name,
+#                          text=request.text,
+#                          path_or_url=request.path_or_url,
+#                          chunk_size=request.chunk_size,
+#                          chunk_overlap=request.chunk_overlap,
+#                          **metadata)
+#     except Exception as e:
+#         return InternalError(str(e))
 
 @app.post("/gen/v1/rag/index-file")
 async def index_file(collection_name: str = Form(...), file: UploadFile = File(...), metadata: str = Form(...)):
@@ -112,7 +109,6 @@ async def index_file(collection_name: str = Form(...), file: UploadFile = File(.
         return InternalError(str(e))
 
 ### ----------------- RETRIEVAL ----------------- ###
-
 
 class QueryRequest(BaseModel):
     collection_name: str
@@ -150,84 +146,63 @@ def get_document_by_id(self, collection_name, id):
 ### ----------------- COLLECTIONS ----------------- ###
 
 # DELETE /gen/v1/rag/collection/{}
-
-
 @app.delete("/gen/v1/rag/collection/{collection_name}")
 async def delete_collection(collection_name):
     try:
         RAG.delete_collection(collection_name=collection_name)
+        after = RAG.list_collections()
+        return { "count": after.count }
     except Exception as e:
         return InternalError(str(e))
 
-
-@app.get("/gen/v1/rag/collection/{collection_name}/count")
-async def get_collection_count(collection_name):
-    try:
-        return RAG.get_collection_count(collection_name)
-    except Exception as e:
-        return InternalError(str(e))
-
-# GET /gen/v1/rag/collection/{}
-
-
-@app.get("/gen/v1/rag/collection/{collection_name}")
-async def get_collection(collection_name):
-    try:
-        return RAG.get_collection(collection_name)
-    except Exception as e:
-        return InternalError(str(e))
-
-# PUT /gen/v1/rag/collection/{}
-
-
-@app.put("/gen/v1/rag/collection/{collection_name}")
-async def create_collection(collection_name):
-    try:
-        RAG.get_collection(collection_name)
-    except Exception as e:
-        return InternalError(str(e))
-
-
+# GET /gen/v1/rag/collections
 @app.get("/gen/v1/rag/collections")
 async def list_collections():
     try:
-        return RAG.list_collections()
+        return [collection.name for collection in RAG.list_collections()]
     except Exception as e:
         return InternalError(str(e))
 
-
-# REPOSITORIES --------------------------------------------------------------------------------------------------------
-
-
-def get_session():
-    if not os.environ.get("SQLALCHEMY_DATABASE_URI"):
-        raise Exception("SQLALCHEMY_DATABASE_URI is not set")
-    engine = create_engine(os.environ["SQLALCHEMY_DATABASE_URI"])
-    Session = sessionmaker(bind=engine)
-    return Session()
-
-
-@app.get("/gen/v1/rag/repositories/user/{user_profile_id}")
-async def user_repository_get_user_by_profile_id(user_profile_id):
+# GET /gen/v1/rag/collection/{collection_name}
+@app.get("/gen/v1/rag/collection/{collection_name}")
+async def list_documents(collection_name):
     try:
-        session = get_session()
-        repository = UserProfileRepository(session)
-        return repository.get_user_by_id(user_profile_id)
+        docs = RAG.list_documents(collection_name=collection_name)
+        return [{"id":doc.Id,"title":doc.Title,"size":doc.ByteSize,"chunk_count":doc.ChunkCount,"chunk_size":doc.ChunkSize,"overlap_size":doc.Overlap,"source":doc.Source} for doc in docs]
     except Exception as e:
         return InternalError(str(e))
 
-
-@app.get("/gen/v1/rag/repositories/user_documents/{user_profile_id}")
-async def user_repository_list_user_documents_by_profile_id(user_profile_id):
+@app.get("/gen/v1/rag/document/{document_id}")
+async def get_document(document_id):
     try:
-        session = get_session()
-        repository = UserDocumentRepository(session)
-        documents = repository.list_user_documents(user_profile_id)
-        session.close()
-        return {'documents': [doc.to_dict() for doc in documents]}
+        return RAG.get_document(document_id=document_id)
     except Exception as e:
         return InternalError(str(e))
 
+class UpdateDocumentRequest(BaseModel):
+    Id: str
+    FileName: str = None
+    Source: str = None
+    Abstract: str = None
+    Authors: str = None
+    Title: str = None
+    Publisher: str = None
+    PublishedDate: str = None
+    Comments: str = None
+@app.post("/gen/v1/rag/document")
+async def update_document(req: UpdateDocumentRequest = Body(...)):
+    try:
+        #req_dict = req.model_dump()
+        return RAG.update_document(document=req)
+    except Exception as e:
+        return InternalError(str(e))
+
+@app.delete("/gen/v1/rag/document/{document_id}")
+async def delete_document(document_id):
+    try:
+        return RAG.delete_document(document_id=document_id)
+    except Exception as e:
+        return InternalError(str(e))
 
 # -----------------------------------------------------------------------------------------------------------------
 

@@ -11,7 +11,8 @@ from gai.common.utils import get_config, get_config_path
 import threading
 from gai.common import logging, file_utils
 from gai.common.StatusUpdater import StatusUpdater
-
+from gai.gen.rag.Repository import Repository
+from gai.gen.rag.models.IndexedDocument import IndexedDocument
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +27,12 @@ class RAG:
             model_path = os.environ["RAG_MODEL_PATH"]
             self.model_path = os.path.join(app_path, model_path)
         self.chromadb_path = os.path.join(app_path, config["chromadb"]["path"])
+        
+        # sql conn
+        self.sqlite_path = os.path.join(app_path, config["sqlite"]["path"])
+        self.sqlite_string = f'sqlite:///{self.sqlite_path}'
+        self.repo = Repository(self.sqlite_string)
+
         self.n_results = config["chromadb"]["n_results"]
         self.chunks_path = os.path.join(app_path, config["chunks"]["path"])
         self.chunk_size = config["chunks"]["size"]
@@ -62,6 +69,7 @@ class RAG:
                 raise e
 
     # COLLECTIONS
+    # get from chromadb
     @staticmethod
     def get_db():
         try:
@@ -75,6 +83,7 @@ class RAG:
             if not "does not exist." in str(e):
                 raise e
 
+    # get from chromadb
     @staticmethod
     def collection_exists(collection_name):
         db = RAG.get_db()
@@ -86,31 +95,92 @@ class RAG:
                 return False
             raise e
 
+    # get from chromadb
     @staticmethod
     def delete_collection(collection_name):
         logger.info(f"Deleting {collection_name}...")
         db = RAG.get_db()
         if RAG.collection_exists(collection_name):
             db.delete_collection(collection_name)
-
+            
+        repo = RAG.get_repo()
+        docids = repo.list_docids(collection_name)
+        for docid in docids:
+            repo.delete_document(docid)
+    
+    # get from chromadb
     @staticmethod
     def get_collection(collection_name):
         db = RAG.get_db()
         return db.get_or_create_collection(collection_name)
 
+    # get from chromadb
     @staticmethod
     def create_collection(collection_name):
         db = RAG.get_db()
         return db.get_or_create_collection(collection_name)
 
+    # get from chromadb
     @staticmethod
     def list_collections():
         db = RAG.get_db()
         return db.list_collections()
 
+    # get from chromadb
     @staticmethod
-    def get_document_count(self, collection_name):
-        return RAG.get_collection(collection_name).count()
+    def list_chunks(collection_name):
+        return RAG.get_collection(collection_name).get()
+
+    # get from chromadb
+    @staticmethod
+    def get_chunk(collection_name, id):
+        collection = RAG.get_collection(collection_name)
+        return collection.get(ids=[id])
+
+    # get from sqlite
+    @staticmethod
+    def get_repo():
+        app_path = get_config_path()
+        config = get_config()["gen"]["rag"]
+        sqlite_path = os.path.join(app_path, config["sqlite"]["path"])
+        sqlite_string = f'sqlite:///{sqlite_path}'
+        return Repository(sqlite_string)
+
+    # get from sqlite
+    @staticmethod
+    def list_documents(collection_name):
+        repo = RAG.get_repo()
+        collection = repo.list_documents(collection_name)
+        return collection
+
+    # get from sqlite
+    @staticmethod
+    def get_document(document_id):
+        repo = RAG.get_repo()
+        document = repo.get_document(document_id)
+        return document
+
+    # get from sqlite
+    @staticmethod
+    def update_document(document):
+        repo = RAG.get_repo()
+        return repo.update_document(document)
+
+    # get from sqlite
+    @staticmethod
+    def delete_document(document_id):
+        repo = RAG.get_repo()
+        vs = RAG.get_db()
+
+        # delete from vector store
+        doc = repo.get_document(document_id)
+        collection_name = doc.CollectionName
+        collection = vs.get_collection(collection_name)
+        collection.delete(ids=[chunk.ChunkId for chunk in doc.chunks])
+
+        # delete from sqlite
+        repo.delete_document(document_id)
+        return repo.get_document(document_id)
 
     # INDEXING
     def _get_collection(self, collection_name):
@@ -181,7 +251,32 @@ class RAG:
             if status_updater:
                 await status_updater.update_progress(i, len(chunks))
 
-        return ids
+        # Update sqlite
+        doc = IndexedDocument()
+        doc.CollectionName = collection_name
+        doc.ChunkSize = chunk_size
+        doc.ByteSize = len(text)
+        doc.Overlap = chunk_overlap
+        doc.Title = metadata.get('title', '')
+        doc.FileName = metadata.get('filename', '')
+        doc.Source = metadata.get('source', '')
+        doc.Authors = metadata.get('authors', '')
+        doc.Abstract = metadata.get('abstract', '')
+
+        published_date = metadata.get('published_date', '')
+        if published_date:
+            doc.PublishedDate = datetime.strptime(
+                published_date, '%Y-%B-%d').date()
+        
+        doc.Comments = metadata.get('comments', '')
+        doc.CreatedAt = datetime.now()
+        doc.UpdatedAt = datetime.now()
+        doc.IsActive = True
+
+        doc_id = self.repo.create_document(doc, ids)
+        logger.debug(f"Indexed document {doc_id} into sqlite")
+
+        return doc_id
 
     # RETRIEVAL
 
@@ -211,6 +306,3 @@ class RAG:
         # drop duplicates
         return df.drop_duplicates(subset=['ids']).sort_values('distances', ascending=True)
 
-    def retrieve_by_id(self, collection_name, id):
-        collection = self._get_collection(collection_name)
-        return collection.get(ids=[id])

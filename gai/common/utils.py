@@ -17,7 +17,8 @@ def init():
 def get_rc():
     if (not os.path.exists(os.path.expanduser("~/.gairc"))):
         init()
-    return json.load(open(os.path.expanduser("~/.gairc")))
+    with open(os.path.expanduser("~/.gairc"), 'r') as f:
+        return json.load(f)
 
 
 def get_config_path():

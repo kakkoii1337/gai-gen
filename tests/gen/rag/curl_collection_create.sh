@@ -1,1 +1,0 @@
-curl -X PUT http://localhost:12031/gen/v1/rag/collection/demo

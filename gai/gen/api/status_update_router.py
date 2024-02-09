@@ -62,27 +62,3 @@ async def websocket_endpoint(websocket: WebSocket):
     for task in pending:
         task.cancel()
 
-# @status_update_router.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket):
-#     logger.info("rag.websocket: connecting.")
-
-#     await websocket.accept()
-#     logger.info("rag.websocket: connection accepted.")
-
-#     # Keep track of the websocket in a global variable for later use
-#     await status_updater.connect(websocket)
-
-#     # Start a task to echo messages
-#     receiver_task = asyncio.create_task(receive_text(websocket))
-
-#     # Start a task for handling pings (keepalive)
-#     keepalive_task = asyncio.create_task(send_pings(websocket))
-
-#     # Run both tasks concurrently
-#     done, pending = await asyncio.wait(
-#         [receiver_task, keepalive_task], return_when=asyncio.FIRST_COMPLETED
-#     )
-
-#     # If any task is done, cancel the other one
-#     for task in pending:
-#         task.cancel()

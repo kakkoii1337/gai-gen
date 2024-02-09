@@ -175,6 +175,9 @@
                 "path": "chromadb",
                 "n_results": 3
             },
+            "sqlite": {
+                "path": "gai-rag.db"
+            },
             "model_path": "models/instructor-large",
             "device": "cuda",
             "chunks": {
