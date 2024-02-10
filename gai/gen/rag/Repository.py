@@ -30,6 +30,14 @@ class Repository:
             document.ChunkCount = len(chunk_ids)
             document.CreatedAt = datetime.now()
             document.UpdatedAt = datetime.now()
+            if document.PublishedDate and isinstance(document.PublishedDate,str):
+                try:
+                    document.PublishedDate = datetime.strptime(document.PublishedDate, '%Y-%b-%d')
+                except:
+                    document.PublishedDate = None
+            else:
+                document.PublishedDate = None
+
             for id in chunk_ids:
                 document_chunk = IndexedDocumentChunk(
                     Id=id,
@@ -122,7 +130,15 @@ class Repository:
                 existing_doc.Authors = document.Authors
                 existing_doc.Title = document.Title
                 existing_doc.Publisher = document.Publisher
-                existing_doc.PublishedDate = document.PublishedDate
+
+                if document.PublishedDate and isinstance(document.PublishedDate,str):
+                    try:
+                        existing_doc.PublishedDate = datetime.strptime(document.PublishedDate, '%Y-%b-%d')
+                    except:
+                        existing_doc.PublishedDate = None
+                else:
+                    existing_doc.PublishedDate = None
+
                 existing_doc.Comments = document.Comments
                 existing_doc.UpdatedAt = datetime.now()
 

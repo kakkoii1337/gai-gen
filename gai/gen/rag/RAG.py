@@ -252,31 +252,30 @@ class RAG:
                 await status_updater.update_progress(i, len(chunks))
 
         # Update sqlite
-        doc = IndexedDocument()
-        doc.CollectionName = collection_name
-        doc.ChunkSize = chunk_size
-        doc.ByteSize = len(text)
-        doc.Overlap = chunk_overlap
-        doc.Title = metadata.get('title', '')
-        doc.FileName = metadata.get('filename', '')
-        doc.Source = metadata.get('source', '')
-        doc.Authors = metadata.get('authors', '')
-        doc.Abstract = metadata.get('abstract', '')
+        try:
+            doc = IndexedDocument()
+            doc.CollectionName = collection_name
+            doc.ChunkSize = chunk_size
+            doc.ByteSize = len(text)
+            doc.Overlap = chunk_overlap
+            doc.Title = metadata.get('title', '')
+            doc.FileName = metadata.get('filename', '')
+            doc.Source = metadata.get('source', '')
+            doc.Authors = metadata.get('authors', '')
+            doc.Abstract = metadata.get('abstract', '')
+            doc.PublishedDate = metadata.get('published_date', '')
+            doc.Comments = metadata.get('comments', '')
+            doc.CreatedAt = datetime.now()
+            doc.UpdatedAt = datetime.now()
+            doc.IsActive = True
 
-        published_date = metadata.get('published_date', '')
-        if published_date:
-            doc.PublishedDate = datetime.strptime(
-                published_date, '%Y-%B-%d').date()
-        
-        doc.Comments = metadata.get('comments', '')
-        doc.CreatedAt = datetime.now()
-        doc.UpdatedAt = datetime.now()
-        doc.IsActive = True
+            doc_id = self.repo.create_document(doc, ids)
+            logger.debug(f"Indexed document {doc_id} into sqlite")
 
-        doc_id = self.repo.create_document(doc, ids)
-        logger.debug(f"Indexed document {doc_id} into sqlite")
-
-        return doc_id
+            return doc_id
+        except Exception as error:
+            logger.error(f"vector_store.index: Failed to insert document into sqlite. error={error}")
+            raise error
 
     # RETRIEVAL
 
