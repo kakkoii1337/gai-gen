@@ -81,6 +81,7 @@ async def _text_to_text(request: ChatCompletionRequest = Body(...)):
         else:
             return response
     except Exception as e:
+        logger.error(str(e))
         if (str(e)=='context_length_exceeded'):
             return ContextLengthExceededError()
         if (str(e)=='model_service_mismatch'):

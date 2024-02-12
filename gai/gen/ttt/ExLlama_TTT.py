@@ -1,10 +1,13 @@
-from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
+from gai.gen.ttt.ChunkOutputBuilder import ChunkOutputBuilder
 from gai.gen.ttt.OutputBuilder import OutputBuilder
 import re
 import json
 from typing import List
 from datetime import datetime
 from uuid import uuid4
+from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
+from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_message_tool_call_param import Function
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall, ChoiceDeltaToolCallFunction
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk, Choice as ChunkChoice, ChoiceDelta
 from exllama.generator import ExLlamaGenerator as ExLlamaGen
@@ -130,41 +133,8 @@ class ExLlama_TTT:
         self.client.settings.beam_length = model_params["beam_length"] if "beam_length" in model_params and model_params[
             "beam_length"] is not None else self.client.settings.beam_length
 
-    def _generate_simple(self, prompt, max_new_tokens=128):
-        logger.debug(f"ExLlama_TTT._generate_simple: prompt={prompt}")
 
-        max_seq_len = self.gai_config["max_seq_len"]
-        self.client.end_beam_search()
-        ids, mask = self.client.tokenizer.encode(
-            prompt, return_mask=True, max_seq_len=max_seq_len)
-
-        try:
-            self.client.gen_begin(ids, mask=mask)
-        except RuntimeError as e:
-            if ((str(e).find("exceeds dimension size") != -1)):
-                raise Exception("context_length_exceeded")
-            raise e
-
-        max_new_tokens = min(max_new_tokens, max_seq_len - ids.shape[1])
-
-        finish_reason = "length"
-        eos = torch.zeros((ids.shape[0],), dtype=torch.bool)
-        for i in range(max_new_tokens):
-            token = self.client.gen_single_token(mask=mask)
-            for j in range(token.shape[0]):
-                if token[j, 0].item() == self.client.tokenizer.eos_token_id:
-                    eos[j] = True
-            if eos.all():
-                finish_reason = "stop"
-                break
-
-        text = self.client.tokenizer.decode(
-            self.client.sequence[0] if self.client.sequence.shape[0] == 1 else self.client.sequence)
-        return {"output": text, "finish_reason": finish_reason}
-
-    def _generating(self, prompt, **model_params):
-        logger.debug(f"ExLlama_TTT.generate: prompt={prompt}")
-
+    def _preprocessing(self,prompt,**model_params):
         # Map "max_tokens" to "max_new_tokens" to be compatible with OpenAI's API. We do not want to filter this off.
         if "max_tokens" in model_params and model_params["max_tokens"] is not None:
             model_params["max_new_tokens"] = model_params.pop("max_tokens")
@@ -176,71 +146,10 @@ class ExLlama_TTT:
         model_params = generators_utils.filter_params(
             model_params, self.param_whitelist)
         model_params = {**self.gai_config["hyperparameters"], **model_params}
-        logger.debug(f"ExLlama_TTT.generate: model_params={model_params}")
 
-        input_count = self.token_count(prompt)
-        logger.debug(f"ExLlama_TTT.generate: input token count={input_count}")
+        return model_params
 
-        self._init_settings(model_params)
-        max_new_tokens = model_params["max_new_tokens"] if "max_new_tokens" in model_params and model_params["max_new_tokens"] is not None else 200
 
-        response = self._generate_simple(prompt, max_new_tokens=max_new_tokens)
-
-        logger.debug(f"ExLlama_TTT.generate: raw output={response}")
-
-        # Prepare response
-        id = str(uuid4())
-        response = self.parse_generating_output(
-            id=id, output=response['output'], finish_reason=response['finish_reason'])
-        return response
-
-    # SAMPLE RESPONSE:
-    # ChatCompletion(
-    #    id='chatcmpl-8YquW981VnABKGP0HhIigugRttQWu',
-    #    choices=[
-    #        Choice(
-    #           finish_reason='length',
-    #           index=0,
-    #           logprobs=None,
-    #           message=ChatCompletionMessage(
-    #               content='Once upon a time in a bustling city lived a scruffy, little stray dog named Baxter. Despite his hardships, Baxter had a heart full of hope and would wag his tail at every passerby, hoping someone would take him home. One icy winter day, a kind-hearted woman named Lucy noticed him shivering in a corner. Lucy, who had recently lost her beloved pet, felt an immediate connection with Baxter. Overwhelmed with compassion, she decided to adopt him right then. From that day',
-    #               role='assistant',
-    #               function_call=None,
-    #               tool_calls=None))],
-    #   created=1703317232,
-    #   model='gpt-4-0613',
-    #   object='chat.completion',
-    #   system_fingerprint=None,
-    #   usage=CompletionUsage(completion_tokens=100, prompt_tokens=34, total_tokens=134))
-    def parse_generating_output(self, id, output, finish_reason):
-        output = self._remove_template(output)
-        prompt_tokens = self.token_count(self.prompt)
-        completion_tokens = self.token_count(output)
-        total_tokens = prompt_tokens + completion_tokens
-        created = int(datetime.now().timestamp())
-        response = ChatCompletion(
-            id=id,
-            choices=[
-                Choice(
-                    # "stop","length","content_filter"
-                    finish_reason=finish_reason,
-                    index=0,
-                    logprobs=None,
-                    message=ChatCompletionMessage(
-                        content=output,
-                        role='assistant',
-                        function_call=None,
-                        tool_calls=None
-                    ))
-            ],
-            created=created,
-            model=self.gai_config["model_name"],
-            object="chat.completion",
-            system_fingerprint=None,
-            usage=CompletionUsage(completion_tokens=completion_tokens,
-                                  prompt_tokens=prompt_tokens, total_tokens=total_tokens)
-        )
-        return response
 
     def _should_stop(self, new_text):
         stop_words = self.gai_config.get("stopping_words")
@@ -272,25 +181,103 @@ class ExLlama_TTT:
             if text_type_prefix:
                 return "text"
 
+    def _streaming_text(self, text_type_prefix, response_type, **model_params):
+        if response_type != "text":
+            raise Exception("ExLlama_TTT.streaming_text: incorrect_response_type. Expecting type of be text.")
+
+
+    # The purpose of this function is to classify the nature of the text based on its initial characters.
+    # The text can be classified either as "tool" or "text".
+    # A Tool begins with '{"type":"function","function":'
+    # A Text begins with '{"type":"text", "text":' OR any character that is not '{'
+    # If neither of the above, then it is None and it is not classified yet.
+    def classify_text_nature(self, text):
+
+        # Look for the pattern that matches '{"type":"function","function":'
+        pattern = r'^\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
+        if re.search(pattern, text):
+            return "tools"
+
+        # Look for the pattern that matches '{"type":"tool","tool":'
+        pattern = r'^\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"tool",\s*(\\n)?\s*(\")?tool(\")?\s*:\s*'
+        if re.search(pattern, text):
+            return "tools"
+        
+        # Look for the pattern that doesn't begin with '{'
+        pattern = r'^\s*[^{\s]'
+        if re.search(pattern, text):
+            return "text"
+
+        # Look for the pattern that matches '{"type":"text", "text":'
+        pattern = r'^\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"text",\s*(\\n)?\s*(\")?text(\")?\s*:\s*'
+        if re.search(pattern, text):
+            return "text"
+
+        return None
+
+    # If the response is a tool, the first yielded output will return
+    # the tool name.
+    def _yield_tool_name_output(self, text):
+        tool_name_pattern = r'(\")?name(\")?\s*:\s*\"(.*?)\",'
+        match = re.search(tool_name_pattern, text)
+        if match:
+            tool_name=match.group(3)
+            logger.debug(
+                f"ExLlama_TTT.streaming: tool_name={tool_name}")
+            output = ChunkOutputBuilder.BuildToolHead(
+                generator=self.gai_config["model_name"], 
+                tool_name=tool_name)
+            return output
+        return None
+
+    # If the response is a tool, the next yielded output will return
+    # the tool arguments.
+    def _yield_tool_arguments_output(self, text):
+        tool_arguments_pattern = r'"parameters":(\s*\{[\s\S]*?\})'
+        match = re.search(tool_arguments_pattern, text)
+        if match:
+            tool_arguments=match.group(1)
+            logger.debug(
+                f"ExLlama_TTT.streaming: tool_arguments={tool_arguments}")
+            output = ChunkOutputBuilder.BuildToolBody(
+                generator=self.gai_config["model_name"], 
+                tool_arguments=tool_arguments)
+            return output
+        return None
+    
+    def _yield_tool_stop_output(self, finish_reason, stop_word=None):
+        if finish_reason == "tool_calls":
+            logger.debug(
+                f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
+        if finish_reason == "stop":
+            logger.debug(
+                f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")   
+        if finish_reason == "length":
+            logger.debug(
+                f"ExLlama_TTT.streaming: stopped by : length")   
+        self.client.end_beam_search()
+        return ChunkOutputBuilder.BuildToolTail(
+            generator=self.gai_config["model_name"], 
+            finish_reason=finish_reason)
+
     def _streaming(self, prompt, **model_params):
-
-        stopping_words = self.gai_config["stopping_words"]
-
-        new_text = ""
-        last_text = ""
-
         logger.debug(f"ExLlama_TTT.streaming: prompt={prompt}")
-        model_params = generators_utils.filter_params(
-            model_params, self.param_whitelist)
-        model_params = {**self.gai_config["hyperparameters"], **model_params}
 
-        logger.debug(f"model_params: {model_params}")
+        model_params= self._preprocessing(prompt, **model_params)
+        logger.debug(f"ExLlama_TTT.streaming: model_params={model_params}")
 
         input_count = self.token_count(prompt)
         logger.debug(f"ExLlama_TTT.streaming: input token count={input_count}")
 
+        # Initialize exllama settings
         self._init_settings(model_params)
         max_new_tokens = model_params["max_new_tokens"] if "max_new_tokens" in model_params and model_params["max_new_tokens"] is not None else 200
+
+        # ----- generating and streaming should be identical above this line -----
+
+        stopping_words = self.gai_config["stopping_words"]
+        new_text = ""
+        last_text = ""
 
         self.client.end_beam_search()
         ids = self.tokenizer.encode(prompt)
@@ -303,108 +290,75 @@ class ExLlama_TTT:
         prompt_len = len(prompt)
 
         response_type = None
+        tool_name_output = None
+        tool_arguments_output = None
 
-        chunk_id = OutputBuilder.Generate_ChatCompletion_Id()
-        created = OutputBuilder.Generate_CreationTime()
-        tool_id = OutputBuilder.Generate_ToolCall_Id()
-        tool_name = None
-        parameters = None
-
+        initial_text = ''
         for i in range(max_new_tokens):
             token = self.client.gen_single_token()
             text = self.tokenizer.decode(self.client.sequence[0])
             new_text = text[len(prompt):]
 
-            # eg. {"type":"function","function":{"name":"gg","arguments":"{\n    \"query\": \"What is the capital of France?\"\n}"}
-            TOOLS_TYPE_PREFIX_RE = r'^\s*{\s*(\\n)?\s*(\")?type(\")?\s*:\s*"function",\s*(\\n)?\s*(\")?function(\")?\s*:\s*'
-            tools_type_prefix = re.search(TOOLS_TYPE_PREFIX_RE, new_text)
-            if tools_type_prefix and (response_type == "tools" or response_type is None):
+            # At this point, we cannot tell if the stream is returning a tool call or text response.
+            # In order to do that, we will compare the text generated so far with the JSON pattern
+            # corresponding to a function call. If it matches, then it is a tool call, otherwise it is a text response.
+            # For example, a stream starting with {"type":"function","function": will be considered a match.
+            response_type = self.classify_text_nature(new_text)
 
-                # ------------------ When it reaches here, that means it is a tool call ------------------
+            if response_type == "tools":
 
-                if response_type is None:
-                    response_type = "tools"
-                    tools_type_prefix_len = len(tools_type_prefix.string)
+                # initial text is the text that were accumulated when classification was still unknown.
+                # Once the response_type is confirmed, the initial_text must be flushed out.
+                if (initial_text is None):
+                    initial_text = new_text
 
-                # This is the generated text string
-                new_text = text[prompt_len+tools_type_prefix_len:]
+                # This is the generated text
+                new_text = text[prompt_len+len(initial_text):]
 
                 # This is the new sub-word decoded from the token
                 new_token = new_text.replace(last_text, "")
 
-                if len(buffer) < max_new_tokens - i:
-                    buffer.append(new_token)
-                else:
-                    raise Exception(
-                        "ExLlama_TTT.streaming: Tool call error due to exceeded max_new_tokens.")
+                # Find tool name and yield output head
+                if not tool_name_output:
+                    tool_name_output = self._yield_tool_name_output(new_text)
+                    if tool_name_output:
+                        yield tool_name_output
 
-                # Find tool name and yield output start
-                if not tool_name:
-                    tool_name_re = r'(\")?name(\")?\s*:\s*\"(.*?)\",'
-                    match = re.search(tool_name_re, new_text)
-                    if match:
-                        tool_name = match.group(3)
-                        logger.debug(
-                            f"ExLlama_TTT.streaming: tool_name={tool_name}")
-                        # Yield Tool Output Start
-                        output = OutputBuilder.Build_Tool_Start(
-                            created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, role="assistant", tool_id=tool_id, tool_name=tool_name)
-                        yield output
+                # Find tool args and yield output body
+                if not tool_arguments_output:
+                    tool_arguments_output = self._yield_tool_arguments_output(new_text)
+                    if tool_arguments_output:
+                        yield tool_arguments_output
 
-                # Find args and yield output body
-                if not parameters:
-                    match = re.search(
-                        r'"parameters":(\s*\{[\s\S]*?\})', new_text)
-                    if match:
-                        parameters = match.group(1).strip()
-                        output = OutputBuilder.Build_Tool_Body(
-                            created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, tool_arg=parameters)
-                        yield output
-
-                # stop by natural end of sentence
+                # stop by natural end of sentence and yield output tail
                 if token.item() == self.tokenizer.eos_token_id:
-                    logger.debug(
-                        f"ExLlama_TTT.streaming: stopped by eos_token_id: {self.tokenizer.eos_token_id}")
-                    output = OutputBuilder.Build_Tool_End(
-                        created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, finish_reason="tool_calls")
-                    self.client.end_beam_search()
-                    yield output
+                    yield self._yield_tool_stop_output("tool_calls")
                     return
 
-                # Stop by stopping words
+                # Stop by stopping words. Exception case.
                 for stop_word in stopping_words:
                     if new_text.endswith(stop_word):
-                        logger.debug(
-                            f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
-                        output = OutputBuilder.Build_Tool_End(
-                            created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, finish_reason="stop")
-                        self.client.end_beam_search()
-                        yield output
+                        yield self._yield_tool_stop_output("stop", stop_word)
                         return
 
                 # Stop by max_new_tokens
+                # Other than finish_reason="tool_calls", the output should be treated as exception
                 if i == max_new_tokens - prompt_len - tools_type_prefix_len:
-                    logger.debug(
-                        f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
-                    output = OutputBuilder.Build_Tool_End(
-                        created=created, model=self.gai_config["model_name"], chunk_id=chunk_id, finish_reason="length")
-                    self.client.end_beam_search()
-                    yield output
+                    yield self._yield_tool_stop_output("length")
                     return
 
-            # TEXT_TYPE_PREFIX_RE = string that does not begin with "{"
-            TEXT_TYPE_PREFIX_RE = r'^\s*[^{\s]'
-            text_type_prefix = re.search(TEXT_TYPE_PREFIX_RE, new_text)
+            if response_type == "text":
 
-            if text_type_prefix and (response_type == "text" or response_type is None):
-                if response_type is None:
-                    response_type = "text"
-                    yield self.parse_chunk_output(id, text_type_prefix.string)
-                if text_type_prefix_len == 0:
-                    text_type_prefix_len = len(text_type_prefix.string)
-                new_text = text[prompt_len+text_type_prefix_len:]
+                # new_text = total text - prompt
+                new_text = text[prompt_len:]
 
-                # Get new decoded token by taking difference from last response.
+                # initial text is the text that were accumulated when classification was still unknown.
+                # Once the response_type is confirmed, the initial_text must be flushed out.
+                if (not initial_text):
+                    initial_text = new_text
+                    yield ChunkOutputBuilder.BuildContentHead(generator=self.gai_config["model_name"])
+
+                # new_token = new_text - last_text
                 # This is equivalent to new_token = self.tokenizer.decode(token) but faster.
                 new_token = new_text.replace(last_text, "")
 
@@ -416,19 +370,20 @@ class ExLlama_TTT:
 
                     JSON_SUFFIX_RE = r'\s*"\s*}\s*$'
                     buffer_str = re.sub(JSON_SUFFIX_RE, '', buffer_str)
-                    yield self.parse_chunk_output(id, buffer_str)
-                    self.client.end_beam_search()
-                    return self.parse_chunk_output(id, "", "stop")
 
-                # Add new token to a 10 token buffer:
-                if len(buffer) < 10:
-                    buffer.append(new_token)
-                else:
-                    # Remove oldest token from buffer and add new token
+                    # Flush the buffer and stop
+                    yield ChunkOutputBuilder.BuildContentBody(generator=self.gai_config["model_name"],content=buffer_str)                    
+                    yield ChunkOutputBuilder.BuildContentTail(generator=self.gai_config["model_name"],finish_reason="stop")                    
+                    self.client.end_beam_search()
+                    return
+
+                # Add new token to a 10 token holding buffer to monitor for stopping word.
+                buffer.append(new_token)
+                if len(buffer) == 11:
+                    # Once the buffer overflows, the output is dequeued and yielded.
                     output_token = buffer[0]
-                    yield self.parse_chunk_output(id, output_token)
+                    yield ChunkOutputBuilder.BuildContentBody(generator=self.gai_config["model_name"],content=output_token)                    
                     buffer = buffer[1:]
-                    buffer.append(new_token)
 
                 # Stop by stopping words
                 for stop_word in stopping_words:
@@ -437,185 +392,81 @@ class ExLlama_TTT:
                         logger.debug(
                             f"ExLlama_TTT.streaming: stopped by : '{stop_word}'")
                         buffer_str = buffer_str.replace(stop_word, "")
-                        yield self.parse_chunk_output(id, buffer_str)
-                        self.client.end_beam_search()
-                        return self.parse_chunk_output(id, "", "stop")
 
-                # Stop by max_new_tokens
+                        # Flush the buffer and stop
+                        yield ChunkOutputBuilder.BuildContentBody(generator=self.gai_config["model_name"],content=buffer_str)                        
+                        yield ChunkOutputBuilder.BuildContentTail(generator=self.gai_config["model_name"],finish_reason="stop")
+                        self.client.end_beam_search()
+                        return
+
+                # Stop by max_new_tokens exclude buffer
                 if i == max_new_tokens - 1 - len(buffer):
                     logger.debug(
                         f"ExLlama_TTT.streaming: stopped by max_new_tokens: {max_new_tokens}")
                     # Yield all tokens in buffer
                     buffer_str = "".join(buffer)
-                    yield self.parse_chunk_output(id, buffer_str)
+
+                    # Flush the buffer and stop
+                    yield ChunkOutputBuilder.BuildContentBody(generator=self.gai_config["model_name"],content=buffer_str)
+                    yield ChunkOutputBuilder.BuildContentTail(generator=self.gai_config["model_name"],finish_reason="length")
                     self.client.end_beam_search()
-                    return self.parse_chunk_output(id, "", "length")
+                    return
 
                 # Update last_text so that it can be used to derive new_token next round
                 last_text = new_text
 
-        # Update last_text so that it can be used to derive new_token next round
-        last_text = new_text
-
         # all done:
         self.client.end_beam_search()
+        if response_type is None:
+            raise Exception(f"ExLlama_TTT: Response type cannot be classified: {text[prompt_len:]}")
         return
 
-    # Sample:
-    # ChatCompletionChunk(
-    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u',
-    #     choices=[
-    #          Choice(delta=ChoiceDelta(content='', function_call=None, role='assistant', tool_calls=None),
-    #          finish_reason=None,
-    #          index=0,
-    #          logprobs=None)],
-    #     created=1703314868,
-    #     model='gpt-4-0613',
-    #     object='chat.completion.chunk',
-    #     system_fingerprint=None)
-    # .....
-    # ChatCompletionChunk(
-    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u',
-    #     choices=[
-    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role=None, tool_calls=None),
-    #          finish_reason='length',
-    #          index=0,
-    #          logprobs=None)],
-    #     created=1703314868,
-    #     model='gpt-4-0613',
-    #     object='chat.completion.chunk',
-    #     system_fingerprint=None)
-    def parse_chunk_output(self, id, output, finish_reason=None):
-        created = int(datetime.now().timestamp())
-        response = ChatCompletionChunk(
-            id=id,
-            choices=[
-                ChunkChoice(
-                    delta=ChoiceDelta(
-                        content=output, function_call=None, role='assistant', tool_calls=None),
-                    # "stop","length","content_filter"
-                    finish_reason=finish_reason,
-                    index=0,
-                    logprobs=None,
-                    message=output
+    # It is just a wrapper around _streaming. It may not be the most efficient approach but since generating is seldom used in practise, we can afford to be less efficient.
+    def _generating(self, prompt, **model_params):
+        text = ""
+        finish_reason = None
+        chunk_type=None
+        for chunk in self._streaming(prompt, **model_params):
+
+            # That means this is a stream of tokens
+            if chunk.choices[0].delta.content:
+                if chunk_type is None:
+                    chunk_type='text'
+                text += chunk.choices[0].delta.content
+
+            # That means this is a tool call. For tool calls, we will only yield tool name and tool arguments.
+            if chunk.choices[0].delta.tool_calls and chunk.choices[0].delta.tool_calls[0].function.name:
+                if chunk_type is None:
+                    chunk_type='tool'
+                function_name = chunk.choices[0].delta.tool_calls[0].function.name
+
+            if chunk.choices[0].delta.tool_calls and chunk.choices[0].delta.tool_calls[0].function.arguments:
+                function_arguments = chunk.choices[0].delta.tool_calls[0].function.arguments
+
+            if chunk.choices[0].finish_reason:
+                finish_reason = chunk.choices[0].finish_reason
+
+
+        if chunk_type == 'text':
+            return OutputBuilder.BuildContent(
+                generator=self.gai_config["model_name"], 
+                finish_reason=finish_reason, 
+                content=text, 
+                prompt_tokens=len(prompt), 
+                new_tokens=len(text)
                 )
-            ],
-            created=created,
-            model=self.gai_config["model_name"],
-            object="chat.completion.chunk",
-            system_fingerprint=None,
-            usage=None
-        )
-        return response
 
-    # Sample:
-    # ChatCompletionChunk(
-    #     id='chatcmpl-8YqIOmXu1WLlYcYeMbhPg6yYWBQ1u',
-    #     choices=[
-    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role='assistant', tool_calls=[ChoiceDeltaToolCall(index=0, id='call_LEJiFROo4iNIKMU7C7UGHiwc', function=ChoiceDeltaToolCallFunction(arguments='', name='gg'), type='function')]),finish_reason=None, index=0, logprobs=None),
-    #          ...
-    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role=None, tool_calls=[ChoiceDeltaToolCall(index=0, id=None, function=ChoiceDeltaToolCallFunction(arguments='{\n', name=None), type=None)]), finish_reason=None, index=0, logprobs=None)
-    #          ...
-    #          Choice(delta=ChoiceDelta(content=None, function_call=None, role=None, tool_calls=None, finish_reason=None, index=0, logprobs=None)
-    #          ],
-    #     created=1703314868,
-    #     model='gpt-4-0613',
-    #     object='chat.completion.chunk',
-    #     system_fingerprint=None)
-    # .....
-    def parse_tools_output(self, id, name, arguments, finish_reason=None, type=None):
-
-        if type == "head":
-            tool_call = ChoiceDeltaToolCall(
-                index=0,
-                id=id,
-                function=ChoiceDeltaToolCallFunction(
-                    arguments='',
-                    name=name),
-                type='function')
-            delta = ChoiceDelta(
-                content=None,
-                function_call=None,
-                role='assistant',
-                tool_calls=[tool_call])
-            choices = [ChunkChoice(
-                delta=delta,
-                # "stop","length","content_filter"
-                finish_reason=finish_reason,
-                index=0,
-                logprobs=None,
-                message=None
-            )]
-            response = ChatCompletionChunk(
-                id=id,
-                choices=choices,
-                created=int(datetime.now().timestamp()),
-                model=self.gai_config["model_name"],
-                object="chat.completion.chunk",
-                system_fingerprint=None,
-                usage=None
-            )
-        if type == "body":
-            tool_call = ChoiceDeltaToolCall(
-                index=0,
-                id=id,
-                function=ChoiceDeltaToolCallFunction(
-                    arguments='',
-                    name=name),
-                type='function')
-            delta = ChoiceDelta(
-                content=None,
-                function_call=None,
-                role='assistant',
-                tool_calls=[tool_call])
-            choices = [ChunkChoice(
-                delta=delta,
-                # "stop","length","content_filter"
-                finish_reason=finish_reason,
-                index=0,
-                logprobs=None,
-                message=None
-            )]
-            response = ChatCompletionChunk(
-                id=id,
-                choices=choices,
-                created=int(datetime.now().timestamp()),
-                model=self.gai_config["model_name"],
-                object="chat.completion.chunk",
-                system_fingerprint=None,
-                usage=None
+        if chunk_type == 'tool':        
+            return OutputBuilder.BuildTool(
+                generator=self.gai_config["model_name"],
+                function_name=function_name,
+                function_arguments=function_arguments,
+                prompt_tokens=len(prompt),
+                new_tokens=len(text)
             )
 
-        response = ChatCompletionChunk(
-            id=id,
-            choices=[
-                ChunkChoice(
-                    delta=ChoiceDelta(content=None, function_call=None, role='assistant', tool_calls=[
-                        ChoiceDeltaToolCall(
-                            id=id,
-                            index=0,
-                            type='function',
-                            function=ChoiceDeltaToolCallFunction(
-                                name=name,
-                                arguments=arguments
-                            )
-                        )
-                    ]),
-                    # "stop","length","content_filter"
-                    finish_reason=finish_reason,
-                    index=0,
-                    logprobs=None,
-                    message=None
-                )
-            ],
-            created=int(datetime.now().timestamp()),
-            model=self.gai_config["model_name"],
-            object="chat.completion.chunk",
-            system_fingerprint=None,
-            usage=None
-        )
+        raise Exception('Unknown chunk type.')
 
-        return response
 
     def _apply_template(self, prompt: List):
         prompt = generators_utils.chat_list_to_string(prompt)
